@@ -58,6 +58,7 @@ body{
   background:linear-gradient(90deg,#4A90D9,#27AE60,#F39C12,#E74C3C);
   border-radius:0 0 3px 3px;
 }
+.question-card.distracted{background:#f5f3f0;box-shadow:0 4px 24px rgba(180,100,60,.08),0 1px 4px rgba(0,0,0,.04)}
 .q-number{font-size:14px;color:#95a5a6;margin-bottom:18px;font-weight:500;letter-spacing:1px}
 .q-hint{font-size:13px;color:#F39C12;margin-bottom:6px;min-height:20px;font-weight:600}
 .poem-upper{font-size:38px;font-weight:800;color:#1a1a2e;letter-spacing:8px;margin-bottom:10px;text-shadow:0 1px 0 rgba(0,0,0,.05)}
@@ -770,6 +771,11 @@ function updateEnergyUI() {
   st.textContent = state===1?'专注':'涣散';
   st.className = 'energy-state '+(state===1?'focused':'unfocused');
   const sl = $('sim-label');
+  // 走神时答题区背景变暗
+  const card = $('question-card');
+  if (state === 0) card.classList.add('distracted');
+  else card.classList.remove('distracted');
+
   if (hardwareEEGActive) {
     if (sl) sl.textContent = '硬件 EEG';
   } else {
@@ -864,6 +870,9 @@ function submitAnswer() {
     }
   }
 
+  // 记录上题走神状态（供下一题难度降级）
+  prevStateWasUnfocused = (computeState() === 0);
+
   // 检查冻结
   if ((energy <= 0 || consecutiveErrors >= 3) && freezeCooldownRemain <= 0) {
     setTimeout(() => triggerFreeze(), 600);
@@ -928,6 +937,9 @@ function handleTimeout() {
     challengeQIndex = 0;
     energy = Math.max(30, energy - 30);
   }
+
+  // 记录上题走神状态（供下一题难度降级）
+  prevStateWasUnfocused = (computeState() === 0);
 
   if ((energy <= 0 || consecutiveErrors >= 3) && freezeCooldownRemain <= 0) {
     setTimeout(() => triggerFreeze(), 600);

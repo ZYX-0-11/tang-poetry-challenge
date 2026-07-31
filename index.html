@@ -424,6 +424,11 @@ let userHasInput = false;    // 用户是否已有点击/键盘输入
 let currentTbr = 1.2;        // 当前 TBR 值（mock ~1.2，真实脑电连接后替换）
 let sessionEndTime = null;   // 训练结束时间
 let totalElapsedSec = 0;     // 总训练时长（秒）
+let recentCorrectTimes = []; // 最近5次正确答题用时（反应力个人基准）
+let consecutiveFrustration = 0; // 连续答错/跳过次数（心理调适）
+let lastAnswerWasWrong = false; // 上一题是否答错（即时恢复奖励）
+let previouslyWrongIds = new Set(); // 历史错题ID（跨session，从localStorage加载）
+let autoFilledForRetry = false; // 当前题是否已自动填入（错题重遇辅助）
 
 // ============================================================
 // DOM 引用
@@ -561,6 +566,11 @@ function startGame() {
   sessionEndTime = null;
   currentTbr = 1.2;
   totalElapsedSec = 0;
+  recentCorrectTimes = [];
+  consecutiveFrustration = 0;
+  lastAnswerWasWrong = false;
+  previouslyWrongIds = new Set(loadErrorBank());
+  autoFilledForRetry = false;
   gamePhase = 'PLAYING';
 
   // 启动 EEGReceiver mock 桥接，onUpdate 实时更新 currentTbr
@@ -603,6 +613,19 @@ function loadQuestion() {
   prevStateWasUnfocused = false;
 
   charOptions = buildCharOptions(currentPoem, difficultyMode);
+  // 历史错题重遇：自动填入正确前3字（辅助学习）
+  autoFilledForRetry = false;
+  if (previouslyWrongIds.has(currentPoem.id)) {
+    autoFilledForRetry = true;
+    const correct = [...currentPoem.lower];
+    for (let i = 0; i < 3; i++) {
+      const optIdx = charOptions.indexOf(correct[i]);
+      if (optIdx !== -1 && !slotSources.includes(optIdx)) {
+        selectedSlots[i] = correct[i];
+        slotSources[i] = optIdx;
+      }
+    }
+  }
   gamePhase = 'PLAYING';
   renderQuestion();
   updateBottomBar();
@@ -704,7 +727,7 @@ function startQuestionTimer() {
     // 无用户输入累计（自动提示不算用户输入）
     if (!userHasInput) emptySince += 0.1;
     // 3秒无输入 → 自动提示前两字
-    if (emptySince >= 3 && !hintGiven) {
+    if (emptySince >= 3 && !hintGiven && !autoFilledForRetry) {
       hintGiven = true;
       const correct = [...currentPoem.lower];
       const used = new Set(slotSources.filter(s=>s!==null));
@@ -859,23 +882,18 @@ function submitAnswer() {
     showFeedback(false);
   }
 
-  // 自主学习追踪
-  const pid = currentPoem.id;
-  if (wrongQIds.has(pid)) {
-    retryResults[pid] = isCorrect ? 'breakthrough' : 'repeat';
-  }
-  if (!isCorrect) wrongQIds.add(pid);
+  if (!isCorrect) wrongQIds.add(currentPoem.id);
 
-  updateDimScores(isCorrect, elapsed);
+  updateDimScores(isCorrect, elapsed, userAnswer, false);
   updateEnergyUI();
   updateDimUI();
   updateBottomBar();
 
-  // 冻结恢复后第一题 → 心理调适计分
+  // 冻结恢复后第一题 → 心理调适大事件
   if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
     freezeRecoveryQAnswered = true;
     if (isCorrect) {
-      dimScores.adaptation = clamp(dimScores.adaptation + (elapsed < 4 ? 15 : 5), 25, 100);
+      dimScores.adaptation = clamp(dimScores.adaptation + (elapsed < 4 ? 10 : 3), 25, 100);
     } else {
       dimScores.adaptation = clamp(dimScores.adaptation - 5, 25, 100);
     }
@@ -916,10 +934,10 @@ function skipQuestion() {
   wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'跳过', title:currentPoem.title, id:currentPoem.id});
   const pid = currentPoem.id;
   wrongQIds.add(pid);
-  dimScores.autonomy = clamp(dimScores.autonomy - 3, 25, 100);
+  updateDimScores(false, 0, null, true);
   if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
     freezeRecoveryQAnswered = true;
-    dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
+    dimScores.adaptation = clamp(dimScores.adaptation - 5, 25, 100);
   }
   if (challengeActive) { challengeActive = false; challengeQIndex = 0; }
   // 替换当前题目，不推进 currentIdx（进度不变）
@@ -945,11 +963,10 @@ function handleTimeout() {
   wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'超时未答', title:currentPoem.title, id:currentPoem.id});
 
   const pid = currentPoem.id;
-  if (wrongQIds.has(pid)) retryResults[pid] = 'repeat';
   wrongQIds.add(pid);
 
   showFeedback(false);
-  updateDimScores(false, CFG.TIME_PER_Q);
+  updateDimScores(false, CFG.TIME_PER_Q, null, false);
   updateEnergyUI();
   updateDimUI();
   updateBottomBar();
@@ -1098,21 +1115,14 @@ function dismissFreeze() {
 }
 
 // ============================================================
-// 5维评分引擎（新版）
+// 5维评分引擎
 // ============================================================
 function calcFocusScore() {
   const total = correctCount + errorCount;
   if (total === 0) return 50;
-
-  // ===== 模块一：脑电专注分（50分） =====
   const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
   const eegScore = eegRatio * 50;
-
-  // ===== 模块二：执行效能分（50分） =====
-  // 正确率 25分
   const accuracyScore = (correctCount / total) * 25;
-
-  // 反应速度 15分（走神题速度分减半）
   let totalSpeedW = 0, weightedSpeed = 0;
   questionRecords.forEach(r => {
     const w = r.stateAtAnswer === 1 ? 1.0 : 0.5;
@@ -1121,8 +1131,6 @@ function calcFocusScore() {
   });
   const avgSpeed = totalSpeedW > 0 ? weightedSpeed / totalSpeedW : 0;
   const speedScore = Math.max(0, avgSpeed * 15);
-
-  // 稳定性 10分（走神题稳定性减半）
   const meanT = total > 0 ? questionRecords.reduce((s,r)=>s+r.elapsed,0) / total : CFG.TIME_PER_Q;
   let totalStabW = 0, weightedVar = 0;
   questionRecords.forEach(r => {
@@ -1132,37 +1140,77 @@ function calcFocusScore() {
   });
   const weightedStd = totalStabW > 0 ? Math.sqrt(weightedVar / totalStabW) : 4;
   const stabilityScore = Math.max(0, Math.min(10, (1 - weightedStd / 4) * 10));
-
   let execScore = accuracyScore + speedScore + stabilityScore;
-
-  // ===== 联动：脑电达标率<60% → 执行分打折 =====
-  if (eegRatio < 0.6 && total >= 3) {
-    execScore = execScore * (eegRatio / 0.6);
-  }
-
+  if (eegRatio < 0.6 && total >= 3) { execScore = execScore * (eegRatio / 0.6); }
   return clamp(Math.round(eegScore + execScore), 0, 100);
 }
 
-function updateDimScores(isCorrect, elapsed) {
-  // 专注力：两模块联动模型
-  dimScores.focus = calcFocusScore();
+function applyFrustrationPenalty() {
+  if (consecutiveFrustration === 2) dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
+  else if (consecutiveFrustration >= 3) dimScores.adaptation = clamp(dimScores.adaptation - 5, 25, 100);
+}
 
-  // 自主学习：错题突破 +15，重蹈覆辙 -10
-  let autoDelta = 0;
+function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
+  if (isSkip) {
+    dimScores.autonomy = clamp(dimScores.autonomy - 2, 25, 100);
+    consecutiveFrustration++;
+    lastAnswerWasWrong = true;
+    applyFrustrationPenalty();
+    return;
+  }
+
+  const state = computeState();
   const pid = currentPoem.id;
-  if (wrongQIds.has(pid) && isCorrect) autoDelta = 15;   // 突破
-  else if (wrongQIds.has(pid) && !isCorrect) autoDelta = -10; // 重蹈覆辙
-  dimScores.autonomy = clamp(dimScores.autonomy + autoDelta, 25, 100);
 
-  // 反应力：3.0s 基准
-  if (isCorrect && elapsed < CFG.REACTION_BASE) dimScores.reaction = clamp(dimScores.reaction + 2, 30, 100);
-  else if (isCorrect && elapsed >= CFG.REACTION_BASE) dimScores.reaction = clamp(dimScores.reaction + 1, 30, 100);
-  else dimScores.reaction = clamp(dimScores.reaction - 0.5, 30, 100);
+  // === 1. 专注力：每题即时奖惩 ===
+  if (state === 1 && isCorrect) dimScores.focus = clamp(dimScores.focus + 2, 0, 100);
+  else if (state === 0 && isCorrect) dimScores.focus = clamp(dimScores.focus + 0, 0, 100);
+  else if (state === 0 && !isCorrect) dimScores.focus = clamp(dimScores.focus - 3, 0, 100);
 
-  // 逻辑思维：答对 +10，答错 -5
-  dimScores.logic = clamp(dimScores.logic + (isCorrect ? 10 : -5), 20, 100);
+  // === 2. 自主学习：历史错题记忆 + 辅助教学 ===
+  if (previouslyWrongIds.has(pid)) {
+    if (isCorrect) dimScores.autonomy = clamp(dimScores.autonomy + 5, 25, 100);
+    else dimScores.autonomy = clamp(dimScores.autonomy - 5, 25, 100);
+    previouslyWrongIds.delete(pid);
+  } else if (!isCorrect) {
+    dimScores.autonomy = clamp(dimScores.autonomy - 2, 25, 100);
+    wrongQIds.add(pid);
+  }
 
-  // 心理调适：只在冻结恢复后第一题计分（已在submitAnswer/handleTimeout中处理）
+  // === 3. 反应力：个人近5次正确均值基准 ===
+  if (isCorrect) {
+    recentCorrectTimes.push(elapsed);
+    if (recentCorrectTimes.length > 5) recentCorrectTimes.shift();
+    const baseline = recentCorrectTimes.reduce((a,b)=>a+b,0) / recentCorrectTimes.length;
+    if (elapsed <= baseline * 0.8) dimScores.reaction = clamp(dimScores.reaction + 2, 30, 100);
+    else if (elapsed <= baseline * 1.1) dimScores.reaction = clamp(dimScores.reaction + 1, 30, 100);
+    else dimScores.reaction = clamp(dimScores.reaction - 1, 30, 100);
+  } else {
+    dimScores.reaction = clamp(dimScores.reaction - 0.5, 30, 100);
+  }
+
+  // === 4. 逻辑思维：仅检测"字全对但顺序错" ===
+  if (!isCorrect && userAnswer && userAnswer.length === 5) {
+    const correctChars = [...currentPoem.lower];
+    const userChars = [...userAnswer];
+    const userSet = new Set(userChars);
+    const correctSet = new Set(correctChars);
+    const charsIdentical = userSet.size === correctSet.size && [...userSet].every(c => correctSet.has(c));
+    if (charsIdentical && userAnswer !== currentPoem.lower) {
+      dimScores.logic = clamp(dimScores.logic - 5, 20, 100);
+    }
+  }
+
+  // === 5. 心理调适：即时恢复 + 连续受挫阶梯 ===
+  if (isCorrect) {
+    if (lastAnswerWasWrong) dimScores.adaptation = clamp(dimScores.adaptation + 2, 25, 100);
+    consecutiveFrustration = 0;
+    lastAnswerWasWrong = false;
+  } else {
+    consecutiveFrustration++;
+    lastAnswerWasWrong = true;
+    applyFrustrationPenalty();
+  }
 }
 
 function updateDimUI() {

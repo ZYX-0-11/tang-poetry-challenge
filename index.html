@@ -282,6 +282,14 @@ body{
       5. 能量满 100 可主动挑战双题连击<br>
       6. 点击已填槽位可撤销，共 20 题
     </div>
+    <div style="margin-bottom:18px">
+      <label style="font-size:14px;color:#555;display:block;margin-bottom:6px">受试者ID</label>
+      <input type="text" id="subject-id-input" placeholder="例如 S001" maxlength="20"
+        style="width:200px;height:40px;border:2px solid #d5dde5;border-radius:10px;
+        text-align:center;font-size:18px;font-weight:700;color:#2c3e50;outline:none;
+        transition:border-color .2s"
+        onfocus="this.style.borderColor='#4A90D9'" onblur="this.style.borderColor='#d5dde5'">
+    </div>
     <button class="start-btn" id="start-btn">开始挑战</button>
   </div>
 </div>
@@ -304,7 +312,7 @@ body{
       <canvas id="radar-canvas" width="280" height="280" style="max-width:240px"></canvas>
       <h3>错题本</h3>
       <ul class="wrong-list" id="wrong-list"></ul>
-      <button class="export-btn" id="export-csv-btn">导出 CSV</button>
+      <button class="export-btn" id="export-csv-btn">导出 CSV（逐题记录）</button>
     </div>
     <div id="tab-history" style="display:none">
       <h2>15天能力变化</h2>
@@ -375,6 +383,7 @@ let sessionTotalSec = 0;           // 全程总秒数（能量引擎累计）
 let difficultyMode = 'normal';    // 'normal' | 'easy'
 let prevStateWasUnfocused = false;
 let dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70};
+let subjectId = '';
 // 自主学习追踪
 let wrongQIds = new Set();        // 错过的题目id
 let retryResults = {};            // {poemId: 'breakthrough'|'repeat'}
@@ -486,6 +495,11 @@ function pickQuestions() {
 }
 
 function startGame() {
+  subjectId = $('subject-id-input').value.trim();
+  if (!subjectId) {
+    alert('请输入受试者ID（如 S001）');
+    return;
+  }
   questions = pickQuestions();
   currentIdx = 0;
   score = 0;
@@ -672,8 +686,8 @@ function startEnergyEngine() {
     if (gap > 0) energy = Math.min(target, energy + step);
     else if (gap < 0) energy = Math.max(target, energy - step);
     updateEnergyUI();
-    // 挑战按钮：专注力 >= 90 且答题中
-    if (energy >= 90 && gamePhase === 'PLAYING' && !challengeActive) {
+    // 挑战按钮：专注力 >= 100 且答题中（受试者主动点击）
+    if (energy >= 100 && gamePhase === 'PLAYING' && !challengeActive) {
       $('challenge-btn').style.display = 'inline-block';
     } else {
       $('challenge-btn').style.display = 'none';
@@ -1161,12 +1175,13 @@ function drawRadar() {
 }
 
 // ============================================================
-// 本地存档
+// 本地存档（按受试者ID分组）
 // ============================================================
 function saveToHistory() {
   const record = {
     date: new Date().toISOString().split('T')[0],
     datetime: new Date().toISOString(),
+    subjectId: subjectId,
     totalScore: score,
     correct: correctCount,
     errors: errorCount,
@@ -1175,16 +1190,28 @@ function saveToHistory() {
     dimensions: {...dimScores},
     timeSeries: timeSeriesLog,
   };
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem('tang_poetry_history')||'[]'); } catch(e){}
-  history.push(record);
-  // 只保留30天
-  if (history.length > 30) history = history.slice(-30);
-  localStorage.setItem('tang_poetry_history', JSON.stringify(history));
+  const allData = JSON.parse(localStorage.getItem('tang_poetry_data')||'{}');
+  if (!allData[subjectId]) allData[subjectId] = {history:[], errorBank:[]};
+  allData[subjectId].history.push(record);
+  if (allData[subjectId].history.length > 30) allData[subjectId].history = allData[subjectId].history.slice(-30);
+  // 错题本跨日保留
+  const newErrors = wrongBook.map(w=>w.id).filter(id=>!allData[subjectId].errorBank.includes(id));
+  allData[subjectId].errorBank = allData[subjectId].errorBank.concat(newErrors);
+  localStorage.setItem('tang_poetry_data', JSON.stringify(allData));
 }
 
 function loadHistory() {
-  try { return JSON.parse(localStorage.getItem('tang_poetry_history')||'[]'); } catch(e){ return []; }
+  try {
+    const allData = JSON.parse(localStorage.getItem('tang_poetry_data')||'{}');
+    return (allData[subjectId]&&allData[subjectId].history) ? allData[subjectId].history : [];
+  } catch(e){ return []; }
+}
+
+function loadErrorBank() {
+  try {
+    const allData = JSON.parse(localStorage.getItem('tang_poetry_data')||'{}');
+    return (allData[subjectId]&&allData[subjectId].errorBank) ? allData[subjectId].errorBank : [];
+  } catch(e){ return []; }
 }
 
 // ============================================================
@@ -1270,8 +1297,12 @@ function exportCSV() {
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  a.href = url; a.download = `tang_poetry_${ts}.csv`; a.click();
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  a.href = url;
+  a.download = `${subjectId}_${ts}_逐题.csv`;
+  a.click();
   URL.revokeObjectURL(url);
 }
 

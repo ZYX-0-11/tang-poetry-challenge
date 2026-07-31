@@ -80,14 +80,13 @@ body{
 /* 简单模式大字体 */
 .char-btn.easy-mode{font-size:30px;height:62px}
 
-.submit-btn{
-  width:100%;max-width:280px;height:48px;border:none;border-radius:14px;
-  background:#4A90D9;color:#fff;font-size:19px;font-weight:700;
-  cursor:pointer;transition:all .15s;letter-spacing:4px;
-}
-.submit-btn:hover:not(:disabled){background:#357ABD;transform:translateY(-1px);box-shadow:0 4px 16px rgba(74,144,217,.35)}
-.submit-btn:disabled{background:#c0c7cf;cursor:not-allowed}
-.clear-btn{display:inline-block;margin-top:8px;font-size:13px;color:#95a5a6;cursor:pointer;text-decoration:underline;background:none;border:none}
+.action-row{display:flex;gap:10px;justify-content:center;margin:0 auto;max-width:420px}
+.action-btn{flex:1;height:48px;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;transition:all .15s;color:#fff;letter-spacing:1px}
+.action-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.action-btn:disabled{background:#c0c7cf!important;cursor:not-allowed}
+.action-undo{background:#7f8c8d}.action-undo:hover{background:#6c7a7e}
+.action-submit{background:#4A90D9;font-size:18px;letter-spacing:3px}.action-submit:hover:not(:disabled){background:#357ABD}
+.action-skip{background:#F39C12}.action-skip:hover{background:#E67E22}
 
 /* 反馈浮层 */
 .feedback-overlay{
@@ -244,10 +243,11 @@ body{
 
     <div class="char-grid" id="char-grid"></div>
 
-    <button class="submit-btn" id="submit-btn" disabled>确认提交</button>
-    <br>
-    <span class="clear-btn" id="clear-btn" style="display:none">撤销上字</span>
-    <button class="submit-btn" id="skip-btn" style="background:#F39C12;max-width:280px;width:100%;margin-top:6px">跳过此题（不计正确率）</button>
+    <div class="action-row">
+      <button class="action-btn action-undo" id="clear-btn">撤销上字</button>
+      <button class="action-btn action-submit" id="submit-btn" disabled>确认提交</button>
+      <button class="action-btn action-skip" id="skip-btn">跳过此题</button>
+    </div>
   </div>
 </div>
 
@@ -542,7 +542,7 @@ function startGame() {
   $('bottom-bar').style.display = 'flex';
   $('main-area').style.display = 'flex';
   $('challenge-btn').style.display = 'none';
-  $('skip-btn').style.display = 'inline-block';
+  $('skip-btn').style.display = '';
 
   updateEnergyUI();
   updateDimUI();
@@ -575,7 +575,8 @@ function loadQuestion() {
 }
 
 function renderQuestion() {
-  $('skip-btn').style.display = 'inline-block';
+  $('skip-btn').style.display = '';
+  $('skip-btn').disabled = false;
   const total = challengeActive ? `连击 ${challengeQIndex+1}/2` : '';
   $('q-label').textContent = `第 ${currentIdx+1} 题 ${total}`;
 
@@ -619,7 +620,7 @@ function renderQuestion() {
   });
 
   $('submit-btn').disabled = selectedSlots.some(s=>s===null);
-  $('clear-btn').style.display = selectedSlots.some(s=>s) ? 'inline-block':'none';
+  $('clear-btn').disabled = !selectedSlots.some(s=>s);
   updateCountdownUI();
 }
 
@@ -659,7 +660,7 @@ function startQuestionTimer() {
   hintGiven = false;
   skipShown = false;
   userHasInput = false;
-  $('skip-btn').style.display = 'inline-block';
+  $('skip-btn').style.display = '';
   updateCountdownUI();
   questionTimerId = setInterval(() => {
     if (gamePhase !== 'PLAYING') return;
@@ -854,7 +855,7 @@ function submitAnswer() {
 function skipQuestion() {
   if (gamePhase !== 'PLAYING') return;
   stopQuestionTimer();
-  $('skip-btn').style.display = 'none';
+  $('skip-btn').disabled = true;
   gamePhase = 'FEEDBACK';
   // 入错题本但不计入正确率
   wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'跳过', title:currentPoem.title, id:currentPoem.id});

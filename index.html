@@ -237,6 +237,7 @@ body{
     <div class="dim-item"><div class="dim-name">反应</div><div id="dim-reaction" class="dim-val">85</div></div>
     <div class="dim-item"><div class="dim-name">逻辑</div><div id="dim-logic" class="dim-val">75</div></div>
     <div class="dim-item"><div class="dim-name">调适</div><div id="dim-adaptation" class="dim-val">70</div></div>
+    <div class="dim-item"><div class="dim-name">记忆</div><div id="dim-memory" class="dim-val">50</div></div>
     <div class="dim-total">总分 <span id="dim-total">79</span></div>
   </div>
 </header>
@@ -406,11 +407,14 @@ let sessionFocusSec = 0;           // 全程专注秒数（能量引擎累计）
 let sessionTotalSec = 0;           // 全程总秒数（能量引擎累计）
 let difficultyMode = 'normal';    // 'normal' | 'easy'
 let prevStateWasUnfocused = false;
-let dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70};
+let dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70, memory:50};
 let subjectId = '';
 // 自主学习追踪
 let wrongQIds = new Set();        // 错过的题目id
-let retryResults = {};            // {poemId: 'breakthrough'|'repeat'}
+let retryQueue = [];              // 待重试题目队列 [{id, qIdx}]
+let retriedIds = new Set();       // 已重试题目ID（不重复出）
+let questionsSinceRetry = 0;      // 距上次重试已答题目数
+let currentRetryId = null;        // 当前题目是否为重试题（null=正常题）
 // 心理调适
 let freezeRecoveryQAnswered = false;
 // 连击
@@ -561,9 +565,12 @@ function startGame() {
   sessionTotalSec = 0;
   difficultyMode = 'normal';
   prevStateWasUnfocused = false;
-  dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70};
+  dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70, memory:50};
   wrongQIds = new Set();
-  retryResults = {};
+  retryQueue = [];
+  retriedIds = new Set();
+  questionsSinceRetry = 0;
+  currentRetryId = null;
   timeSeriesLog = [];
   sessionStartTime = Date.now();
   sessionEndTime = null;
@@ -887,7 +894,13 @@ function submitAnswer() {
     showFeedback(false);
   }
 
-  if (!isCorrect) wrongQIds.add(currentPoem.id);
+  if (!isCorrect) {
+    wrongQIds.add(currentPoem.id);
+    // 答错加入重试队列（用于自主学习判分）
+    if (!retriedIds.has(currentPoem.id) && !retryQueue.some(r=>r===currentPoem.id)) {
+      retryQueue.push(currentPoem.id);
+    }
+  }
 
   updateDimScores(isCorrect, elapsed, userAnswer, false);
   updateEnergyUI();
@@ -940,6 +953,8 @@ function skipQuestion() {
   const pid = currentPoem.id;
   wrongQIds.add(pid);
   skippedQIds.add(pid);
+  // 跳过也加入重试队列
+  if (!retriedIds.has(pid) && !retryQueue.includes(pid)) retryQueue.push(pid);
   updateDimScores(false, 0, null, true);
   if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
     freezeRecoveryQAnswered = true;
@@ -970,6 +985,7 @@ function handleTimeout() {
 
   const pid = currentPoem.id;
   wrongQIds.add(pid);
+  if (!retriedIds.has(pid) && !retryQueue.includes(pid)) retryQueue.push(pid);
 
   showFeedback(false);
   updateDimScores(false, CFG.TIME_PER_Q, null, false);
@@ -1015,6 +1031,21 @@ function loadNextInChallenge() {
 
 function goNextQuestion() {
   gamePhase = 'TRANSITION';
+  questionsSinceRetry++;
+  // 距上次重试 >= 3 题且有待重试题目 → 插入重试题
+  if (questionsSinceRetry >= 3 && retryQueue.length > 0) {
+    const retryId = retryQueue.shift();
+    retriedIds.add(retryId);
+    currentRetryId = retryId;
+    questionsSinceRetry = 0;
+    // 在当前位置之后插入重试题目
+    const poem = POETRY_DB.find(p => p.id === retryId);
+    if (poem) {
+      questions.splice(currentIdx + 1, 0, poem);
+    }
+  } else {
+    currentRetryId = null;
+  }
   currentIdx++;
   if (correctCount + errorCount >= CFG.TOTAL_Q) { endGame(); return; }
   loadQuestion();
@@ -1162,6 +1193,7 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     consecutiveFrustration++;
     lastAnswerWasWrong = true;
     applyFrustrationPenalty();
+    updateMemoryScore(false);
     return;
   }
 
@@ -1173,7 +1205,7 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
   else if (state === 0 && isCorrect) dimScores.focus = clamp(dimScores.focus + 0, 0, 100);
   else if (state === 0 && !isCorrect) dimScores.focus = clamp(dimScores.focus - 3, 0, 100);
 
-  // === 2. 自主学习：历史错题记忆 + 辅助教学 ===
+  // === 2. 自主学习：历史错题记忆 + 本局重试判分 ===
   if (previouslyWrongIds.has(pid)) {
     if (isCorrect) dimScores.autonomy = clamp(dimScores.autonomy + 5, 25, 100);
     else dimScores.autonomy = clamp(dimScores.autonomy - 5, 25, 100);
@@ -1181,6 +1213,14 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
   } else if (!isCorrect) {
     dimScores.autonomy = clamp(dimScores.autonomy - 2, 25, 100);
     wrongQIds.add(pid);
+  }
+  // 本局重试题：答对说明自主学习成功，大幅加分
+  if (currentRetryId === pid) {
+    if (isCorrect) dimScores.autonomy = clamp(dimScores.autonomy + 8, 25, 100);
+    else dimScores.autonomy = clamp(dimScores.autonomy - 3, 25, 100);
+    currentRetryId = null;
+    // 更新跨局错题状态
+    previouslyWrongIds.delete(pid);
   }
 
   // === 3. 反应力：个人近5次正确均值基准 ===
@@ -1232,6 +1272,20 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     lastAnswerWasWrong = true;
     applyFrustrationPenalty();
   }
+
+  // === 6. 记忆力：基于累计正确率 ===
+  updateMemoryScore(isCorrect);
+}
+
+function updateMemoryScore(isCorrect) {
+  const total = correctCount + errorCount;
+  if (total === 0) { dimScores.memory = 50; return; }
+  const acc = correctCount / total;
+  if (isCorrect) {
+    dimScores.memory = clamp(Math.round(acc * 100), 0, 100);
+  } else {
+    dimScores.memory = clamp(Math.round(acc * 100), 0, 100);
+  }
 }
 
 function updateDimUI() {
@@ -1241,7 +1295,9 @@ function updateDimUI() {
   $('dim-reaction').textContent = Math.round(ds.reaction);
   $('dim-logic').textContent = ds.logic;
   $('dim-adaptation').textContent = ds.adaptation;
-  const total = Math.round((ds.focus+ds.autonomy+ds.reaction+ds.logic+ds.adaptation)/5);
+  $('dim-memory').textContent = ds.memory;
+  const dims = [ds.focus, ds.autonomy, Math.round(ds.reaction), ds.logic, ds.adaptation, ds.memory];
+  const total = Math.round(dims.reduce((a,b)=>a+b,0) / dims.length);
   $('dim-total').textContent = total;
 }
 
@@ -1272,7 +1328,7 @@ function endGame() {
   $('main-area').style.display = 'none';
 
   $('res-correct').textContent = correctCount;
-  const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+dimScores.reaction+dimScores.logic+dimScores.adaptation)/5);
+  const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+dimScores.adaptation+dimScores.memory)/6);
   $('res-score').textContent = finalTotal;
   $('res-freeze').textContent = freezeCount;
   const totalSec = sessionEndTime ? Math.round((sessionEndTime - sessionStartTime) / 1000) : 0;
@@ -1354,7 +1410,7 @@ function saveToHistory() {
     date: new Date().toISOString().split('T')[0],
     datetime: new Date().toISOString(),
     subjectId: subjectId,
-    totalScore: Math.round((dimScores.focus+dimScores.autonomy+dimScores.reaction+dimScores.logic+dimScores.adaptation)/5),
+    totalScore: Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+dimScores.adaptation+dimScores.memory)/6),
     correct: correctCount,
     errors: errorCount,
     freezeCount: freezeCount,
@@ -1414,9 +1470,9 @@ function drawHistoryChart() {
 
   const recent = history.slice(-15);
   const labels = recent.map(r=>r.date.slice(5)); // MM-DD
-  const dims = ['focus','autonomy','reaction','logic','adaptation'];
-  const colors = ['#4A90D9','#27AE60','#E74C3C','#F39C12','#9B59B6'];
-  const dimNames = ['专注','自主','反应','逻辑','调适'];
+  const dims = ['focus','autonomy','reaction','logic','adaptation','memory'];
+  const colors = ['#4A90D9','#27AE60','#E74C3C','#F39C12','#9B59B6','#1ABC9C'];
+  const dimNames = ['专注','自主','反应','逻辑','调适','记忆'];
 
   // 坐标轴
   const padL=40, padR=20, padT=20, padB=40;

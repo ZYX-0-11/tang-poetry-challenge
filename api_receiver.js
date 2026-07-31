@@ -90,7 +90,7 @@
     _startMock() {
       this._running = true;
       this.state = 1;
-      this.tbr = +(1.2 + (Math.random() - 0.5) * 0.4).toFixed(2);
+      this.tbr = +(1.0 + Math.random() * 0.6).toFixed(2);
       this._notify();
 
       this._timer = setInterval(() => {
@@ -98,8 +98,8 @@
         if (Math.random() < 0.2) {
           this.state = this.state === 1 ? 0 : 1;
         }
-        // TBR 始终围绕 1.2 随机抖动（桥接值，真实脑电连接后替换）
-        this.tbr = +(1.2 + (Math.random() - 0.5) * 0.4).toFixed(2);
+        // TBR 在 1.0 ~ 1.6 之间随机波动（模拟真实脑电桥接值）
+        this.tbr = +(1.0 + Math.random() * 0.6).toFixed(2);
         this._notify();
       }, 1000);
     },

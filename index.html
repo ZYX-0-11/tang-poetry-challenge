@@ -421,6 +421,7 @@ let skipShown = false;       // 已显示跳过按钮
 let userHasInput = false;    // 用户是否已有点击/键盘输入
 let currentTbr = 1.2;        // 当前 TBR 值（mock ~1.2，真实脑电连接后替换）
 let sessionEndTime = null;   // 训练结束时间
+let totalElapsedSec = 0;     // 总训练时长（秒）
 
 // ============================================================
 // DOM 引用
@@ -557,6 +558,7 @@ function startGame() {
   sessionStartTime = Date.now();
   sessionEndTime = null;
   currentTbr = 1.2;
+  totalElapsedSec = 0;
   gamePhase = 'PLAYING';
 
   // 启动 EEGReceiver mock 桥接，onUpdate 实时更新 currentTbr
@@ -751,9 +753,12 @@ function startEnergyEngine() {
       if (gap > 0) energy = Math.min(target, energy + step);
       else if (gap < 0) energy = Math.max(target, energy - step);
     }
+    // 总训练时长（无论游戏状态，每秒递增）
+    totalElapsedSec++;
     // 逐秒时间序列日志（赛规要求）
     timeSeriesLog.push({
       timestamp: new Date().toISOString(),
+      totalSec: totalElapsedSec,
       state: state,
       tbr: +currentTbr.toFixed(2),
       energy: Math.round(energy),
@@ -1377,13 +1382,10 @@ function drawHistoryChart() {
 function exportCSV() {
   if (timeSeriesLog.length === 0) { alert('暂无数据可导出'); return; }
   const pad = n => String(n).padStart(2,'0');
-  const fmtTime = (d) => {
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  };
-  const startStr = sessionStartTime ? fmtTime(new Date(sessionStartTime)) : 'N/A';
-  const endStr = sessionEndTime ? fmtTime(sessionEndTime) : 'N/A';
+  const startStr = sessionStartTime ? new Date(sessionStartTime).toISOString() : 'N/A';
+  const endStr = sessionEndTime ? sessionEndTime.toISOString() : 'N/A';
 
-  const headers = ['timestamp','state','tbr','energy','qIndex','gamePhase'];
+  const headers = ['timestamp','totalSec','state','tbr','energy','qIndex','gamePhase'];
   const rows = timeSeriesLog.map(r => headers.map(h => {
     const v = r[h];
     if (typeof v === 'string' && v.includes(',')) return `"${v}"`;

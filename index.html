@@ -333,7 +333,7 @@ body{
       <canvas id="radar-canvas" width="280" height="280" style="max-width:240px"></canvas>
       <h3>错题本</h3>
       <ul class="wrong-list" id="wrong-list"></ul>
-      <button class="export-btn" id="export-csv-btn">导出 CSV（逐题记录）</button>
+      <button class="export-btn" id="export-csv-btn">导出 CSV（原始日志）</button>
     </div>
     <div id="tab-history" style="display:none">
       <h2>15天能力变化</h2>
@@ -419,6 +419,8 @@ let emptySince = 0;          // 无用户输入累计秒数
 let hintGiven = false;       // 已触发自动提示
 let skipShown = false;       // 已显示跳过按钮
 let userHasInput = false;    // 用户是否已有点击/键盘输入
+let currentTbr = 1.2;        // 当前 TBR 值（mock ~1.2，真实脑电连接后替换）
+let sessionEndTime = null;   // 训练结束时间
 
 // ============================================================
 // DOM 引用
@@ -553,7 +555,17 @@ function startGame() {
   retryResults = {};
   timeSeriesLog = [];
   sessionStartTime = Date.now();
+  sessionEndTime = null;
+  currentTbr = 1.2;
   gamePhase = 'PLAYING';
+
+  // 启动 EEGReceiver mock 桥接，onUpdate 实时更新 currentTbr
+  if (window.EEGReceiver) {
+    EEGReceiver.onUpdate((data) => {
+      currentTbr = data.tbr;
+    });
+    EEGReceiver.start('mock');
+  }
 
   $('start-screen').style.display = 'none';
   $('result-screen').style.display = 'none';
@@ -739,6 +751,15 @@ function startEnergyEngine() {
       if (gap > 0) energy = Math.min(target, energy + step);
       else if (gap < 0) energy = Math.max(target, energy - step);
     }
+    // 逐秒时间序列日志（赛规要求）
+    timeSeriesLog.push({
+      timestamp: new Date().toISOString(),
+      state: state,
+      tbr: +currentTbr.toFixed(2),
+      energy: Math.round(energy),
+      qIndex: currentIdx + 1,
+      gamePhase: gamePhase,
+    });
     updateEnergyUI();
     // 挑战按钮：专注力 >= 90 且答题中（受试者主动点击）
     if (energy >= 90 && gamePhase === 'PLAYING' && !challengeActive) {
@@ -811,8 +832,6 @@ function submitAnswer() {
   responseTimes.push(elapsed);
   questionRecords.push({isCorrect: userAnswer === currentPoem.lower, elapsed, stateAtAnswer: computeState()});
   const isCorrect = userAnswer === currentPoem.lower;
-
-  logTimeSeries(isCorrect, userAnswer);
 
   if (isCorrect) {
     correctCount++;
@@ -896,8 +915,6 @@ function skipQuestion() {
     dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
   }
   if (challengeActive) { challengeActive = false; challengeQIndex = 0; }
-  // 记录日志但不影响评分
-  logTimeSeries(false, '跳过');
   updateEnergyUI();
   updateDimUI();
   updateBottomBar();
@@ -1160,32 +1177,16 @@ function updateBottomBar() {
   $('cooldown-info').textContent = freezeCooldownRemain > 0 ? `护盾 ${freezeCooldownRemain}s` : '';
 }
 
-// ============================================================
-// 时间序列日志（用于CSV）
-// ============================================================
-function logTimeSeries(isCorrect, userAnswer) {
-  timeSeriesLog.push({
-    timestamp: new Date().toISOString(),
-    state: eegState,
-    qIndex: currentIdx + 1,
-    upper: currentPoem.upper,
-    correctLower: currentPoem.lower,
-    userAnswer: userAnswer,
-    isCorrect: isCorrect,
-    timeUsed: (CFG.TIME_PER_Q - timerSec).toFixed(1),
-    energy: Math.round(energy),
-    difficulty: difficultyMode,
-    freezeCount: freezeCount,
-  });
-}
 
 // ============================================================
 // 结束 & 结果
 // ============================================================
 function endGame() {
   gamePhase = 'FINISHED';
+  sessionEndTime = new Date();
   stopQuestionTimer();
   stopEnergyEngine();
+  if (window.EEGReceiver) EEGReceiver.stop();
   $('top-bar').style.display = 'none';
   $('bottom-bar').style.display = 'none';
   $('main-area').style.display = 'none';
@@ -1375,21 +1376,32 @@ function drawHistoryChart() {
 // ============================================================
 function exportCSV() {
   if (timeSeriesLog.length === 0) { alert('暂无数据可导出'); return; }
-  const headers = ['timestamp','state','qIndex','upper','correctLower','userAnswer','isCorrect','timeUsed','energy','difficulty','freezeCount'];
+  const pad = n => String(n).padStart(2,'0');
+  const fmtTime = (d) => {
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  const startStr = sessionStartTime ? fmtTime(new Date(sessionStartTime)) : 'N/A';
+  const endStr = sessionEndTime ? fmtTime(sessionEndTime) : 'N/A';
+
+  const headers = ['timestamp','state','tbr','energy','qIndex','gamePhase'];
   const rows = timeSeriesLog.map(r => headers.map(h => {
     const v = r[h];
     if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
     return v;
   }).join(','));
-  const csv = [headers.join(','), ...rows].join('\n');
+
+  const metaRows = [
+    `Start_Time,${startStr}`,
+    `End_Time,${endStr}`,
+  ];
+  const csv = [...metaRows, headers.join(','), ...rows].join('\n');
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const now = new Date();
-  const pad = n => String(n).padStart(2,'0');
   const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   a.href = url;
-  a.download = `${subjectId}_${ts}_逐题.csv`;
+  a.download = `${subjectId}_${ts}_原始日志.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1442,7 +1454,7 @@ document.addEventListener('keydown', e => {
 // 启动
 // ============================================================
 loadDB().then(() => {
-  console.log(`题库: ${POETRY_DB.length} 首 | 倒计时固定 ${CFG.TIME_PER_Q}s | 能量 ±${CFG.ENERGY_GAIN}/${CFG.ENERGY_DRAIN}/s`);
+  console.log(`题库: ${POETRY_DB.length} 首 | 倒计时 ${CFG.TIME_PER_Q}s | 逐秒日志已就绪`);
   $('start-screen').style.display = 'flex';
   $('top-bar').style.display = 'none';
   $('bottom-bar').style.display = 'none';

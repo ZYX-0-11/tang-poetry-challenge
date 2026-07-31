@@ -85,23 +85,21 @@
       });
     },
 
-    // 模拟模式：在专注(1)和走神(0)之间交替，模拟真实脑电波动
+    // 模拟模式：生成 mockTBR ~1.2 ± 随机抖动，作为桥接值
+    // 接入真实脑电后，WebSocket 推送的真实 tbr 会直接替换此值
     _startMock() {
       this._running = true;
-      // 默认专注
       this.state = 1;
-      this.tbr = 0.7 + Math.random() * 0.3;
+      this.tbr = +(1.2 + (Math.random() - 0.5) * 0.4).toFixed(2);
       this._notify();
 
       this._timer = setInterval(() => {
         if (!this._running) return;
-        // 80% 概率保持当前状态，20% 概率切换
         if (Math.random() < 0.2) {
           this.state = this.state === 1 ? 0 : 1;
         }
-        // TBR 围绕状态波动
-        const base = this.state === 1 ? 0.8 : 1.6;
-        this.tbr = +(base + (Math.random() - 0.5) * 0.6).toFixed(2);
+        // TBR 始终围绕 1.2 随机抖动（桥接值，真实脑电连接后替换）
+        this.tbr = +(1.2 + (Math.random() - 0.5) * 0.4).toFixed(2);
         this._notify();
       }, 1000);
     },

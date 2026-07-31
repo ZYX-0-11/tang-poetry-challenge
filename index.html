@@ -1197,7 +1197,8 @@ function endGame() {
   $('main-area').style.display = 'none';
 
   $('res-correct').textContent = correctCount;
-  $('res-score').textContent = score;
+  const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+dimScores.reaction+dimScores.logic+dimScores.adaptation)/5);
+  $('res-score').textContent = finalTotal;
   $('res-freeze').textContent = freezeCount;
   const avgT = responseTimes.length>0 ? (responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length).toFixed(1):'0';
   $('res-time').textContent = avgT+'s';
@@ -1276,7 +1277,7 @@ function saveToHistory() {
     date: new Date().toISOString().split('T')[0],
     datetime: new Date().toISOString(),
     subjectId: subjectId,
-    totalScore: score,
+    totalScore: Math.round((dimScores.focus+dimScores.autonomy+dimScores.reaction+dimScores.logic+dimScores.adaptation)/5),
     correct: correctCount,
     errors: errorCount,
     freezeCount: freezeCount,

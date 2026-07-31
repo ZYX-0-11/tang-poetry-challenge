@@ -1195,14 +1195,29 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     dimScores.reaction = clamp(dimScores.reaction - 0.5, 30, 100);
   }
 
-  // === 4. 逻辑思维：仅检测"字全对但顺序错" ===
+  // === 4. 逻辑思维：错题按位置正确数分级扣分 ===
   if (!isCorrect && userAnswer && userAnswer.length === 5) {
     const correctChars = [...currentPoem.lower];
     const userChars = [...userAnswer];
+    let posMatch = 0;
+    for (let i = 0; i < 5; i++) {
+      if (userChars[i] === correctChars[i]) posMatch++;
+    }
     const userSet = new Set(userChars);
     const correctSet = new Set(correctChars);
     const charsIdentical = userSet.size === correctSet.size && [...userSet].every(c => correctSet.has(c));
+    // 字全对仅顺序错（纯排序错误）：-2
     if (charsIdentical && userAnswer !== currentPoem.lower) {
+      dimScores.logic = clamp(dimScores.logic - 2, 20, 100);
+    } else if (posMatch >= 4) {
+      dimScores.logic = clamp(dimScores.logic - 1, 20, 100);
+    } else if (posMatch >= 3) {
+      dimScores.logic = clamp(dimScores.logic - 2, 20, 100);
+    } else if (posMatch >= 2) {
+      dimScores.logic = clamp(dimScores.logic - 3, 20, 100);
+    } else if (posMatch >= 1) {
+      dimScores.logic = clamp(dimScores.logic - 4, 20, 100);
+    } else {
       dimScores.logic = clamp(dimScores.logic - 5, 20, 100);
     }
   }

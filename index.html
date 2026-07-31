@@ -296,11 +296,11 @@ body{
     <div class="rules">
       规则说明：<br>
       1. 屏幕显示五言唐诗上句，从下方选字组成下句<br>
-      2. 每题固定 10 秒倒计时，超时算错<br>
-      3. 专注时能量槽上涨，走神时下降<br>
-      4. 能量归零或连错 3 次触发暖色休整提示<br>
-      5. 能量满 100 可主动挑战双题连击<br>
-      6. 点击已填槽位可撤销，共 20 题
+      2. 每题固定 10 秒，超时算错，共 20 题<br>
+      3. 能量槽随专注度实时变化，专注加分、走神减分<br>
+      4. 能量降至 15 以下、归零或连错 3 次，触发 5 秒暖色休整<br>
+      5. 能量满 90 可主动挑战双题连击，成倍得分<br>
+      6. 点击已填槽位可撤销该字，3 秒无操作自动提示前 2 字
     </div>
     <div style="margin-bottom:22px">
       <label style="font-size:13px;color:#7f8c8d;display:block;margin-bottom:8px;letter-spacing:1px">受试者 ID</label>
@@ -346,6 +346,7 @@ body{
   </div>
 </div>
 
+<script src="api_receiver.js"></script>
 <script>
 // ============================================================
 // 配置常量
@@ -428,6 +429,8 @@ let recentCorrectTimes = []; // 最近5次正确答题用时（反应力个人�
 let consecutiveFrustration = 0; // 连续答错/跳过次数（心理调适）
 let lastAnswerWasWrong = false; // 上一题是否答错（即时恢复奖励）
 let previouslyWrongIds = new Set(); // 历史错题ID（跨session，从localStorage加载）
+let previouslySkippedIds = new Set(); // 历史跳过ID（跨session，仅跳过的题触发自动填入）
+let skippedQIds = new Set();   // 本次跳过题目
 let autoFilledForRetry = false; // 当前题是否已自动填入（错题重遇辅助）
 
 // ============================================================
@@ -570,6 +573,8 @@ function startGame() {
   consecutiveFrustration = 0;
   lastAnswerWasWrong = false;
   previouslyWrongIds = new Set(loadErrorBank());
+  previouslySkippedIds = new Set(loadSkippedErrorBank());
+  skippedQIds = new Set();
   autoFilledForRetry = false;
   gamePhase = 'PLAYING';
 
@@ -613,9 +618,9 @@ function loadQuestion() {
   prevStateWasUnfocused = false;
 
   charOptions = buildCharOptions(currentPoem, difficultyMode);
-  // 历史错题重遇：自动填入正确前3字（辅助学习）
+  // 仅历史跳过的题重遇时自动填入前3字（错题不自填，靠自主学习得分）
   autoFilledForRetry = false;
-  if (previouslyWrongIds.has(currentPoem.id)) {
+  if (previouslySkippedIds.has(currentPoem.id)) {
     autoFilledForRetry = true;
     const correct = [...currentPoem.lower];
     for (let i = 0; i < 3; i++) {
@@ -934,6 +939,7 @@ function skipQuestion() {
   wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'跳过', title:currentPoem.title, id:currentPoem.id});
   const pid = currentPoem.id;
   wrongQIds.add(pid);
+  skippedQIds.add(pid);
   updateDimScores(false, 0, null, true);
   if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
     freezeRecoveryQAnswered = true;
@@ -1348,6 +1354,10 @@ function saveToHistory() {
   // 错题本跨日保留
   const newErrors = wrongBook.map(w=>w.id).filter(id=>!allData[subjectId].errorBank.includes(id));
   allData[subjectId].errorBank = allData[subjectId].errorBank.concat(newErrors);
+  // 跳过题库（仅跳过的题触发自动填入）
+  if (!allData[subjectId].skippedErrorBank) allData[subjectId].skippedErrorBank = [];
+  const newSkips = [...skippedQIds].filter(id=>!allData[subjectId].skippedErrorBank.includes(id));
+  allData[subjectId].skippedErrorBank = allData[subjectId].skippedErrorBank.concat(newSkips);
   localStorage.setItem('tang_poetry_data', JSON.stringify(allData));
 }
 
@@ -1362,6 +1372,13 @@ function loadErrorBank() {
   try {
     const allData = JSON.parse(localStorage.getItem('tang_poetry_data')||'{}');
     return (allData[subjectId]&&allData[subjectId].errorBank) ? allData[subjectId].errorBank : [];
+  } catch(e){ return []; }
+}
+
+function loadSkippedErrorBank() {
+  try {
+    const allData = JSON.parse(localStorage.getItem('tang_poetry_data')||'{}');
+    return (allData[subjectId]&&allData[subjectId].skippedErrorBank) ? allData[subjectId].skippedErrorBank : [];
   } catch(e){ return []; }
 }
 

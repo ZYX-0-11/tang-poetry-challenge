@@ -613,7 +613,7 @@ function renderQuestion() {
   $('skip-btn').style.display = '';
   $('skip-btn').disabled = false;
   const total = challengeActive ? `连击 ${challengeQIndex+1}/2` : '';
-  $('q-label').textContent = `第 ${currentIdx+1} 题 ${total}`;
+  $('q-label').textContent = `第 ${correctCount + errorCount + 1} 题 ${total}`;
 
   // 难度提示
   if (difficultyMode === 'easy') {

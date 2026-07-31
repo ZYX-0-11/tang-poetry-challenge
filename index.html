@@ -588,7 +588,7 @@ function startGame() {
 }
 
 function loadQuestion() {
-  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  if (correctCount + errorCount >= CFG.TOTAL_Q) { endGame(); return; }
   currentPoem = questions[currentIdx];
   selectedSlots = [null,null,null,null,null];
   slotSources = [null,null,null,null,null];
@@ -922,10 +922,14 @@ function skipQuestion() {
     dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
   }
   if (challengeActive) { challengeActive = false; challengeQIndex = 0; }
+  // 替换当前题目，不推进 currentIdx（进度不变）
+  const usedIds = new Set(questions.map(q => q.id));
+  const pool = POETRY_DB.filter(p => !usedIds.has(p.id));
+  questions[currentIdx] = pool.length > 0 ? shuffle(pool)[0] : shuffle(POETRY_DB)[0];
   updateEnergyUI();
   updateDimUI();
   updateBottomBar();
-  setTimeout(() => goNextQuestion(), 900);
+  setTimeout(() => loadQuestion(), 900);
 }
 
 function handleTimeout() {
@@ -974,7 +978,7 @@ function handleTimeout() {
 
 function loadNextInChallenge() {
   currentIdx++;
-  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  if (correctCount + errorCount >= CFG.TOTAL_Q) { endGame(); return; }
   currentPoem = questions[currentIdx];
   selectedSlots = [null,null,null,null,null];
   slotSources = [null,null,null,null,null];
@@ -989,7 +993,7 @@ function loadNextInChallenge() {
 function goNextQuestion() {
   gamePhase = 'TRANSITION';
   currentIdx++;
-  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  if (correctCount + errorCount >= CFG.TOTAL_Q) { endGame(); return; }
   loadQuestion();
 }
 
@@ -1176,11 +1180,11 @@ function updateDimUI() {
 // 底部栏
 // ============================================================
 function updateBottomBar() {
-  const done = Math.min(currentIdx, CFG.TOTAL_Q);
+  const done = correctCount + errorCount;
   const pct = Math.round((done/CFG.TOTAL_Q)*100);
   $('progress-bar').style.width = pct+'%';
   $('progress-text').textContent = `${done} / ${CFG.TOTAL_Q} 题`;
-  $('error-count').textContent = errorCount + wrongBook.filter(w=>w.userAnswer==='跳过').length;
+  $('error-count').textContent = errorCount;
   $('cooldown-info').textContent = freezeCooldownRemain > 0 ? `护盾 ${freezeCooldownRemain}s` : '';
 }
 

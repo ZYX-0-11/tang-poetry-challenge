@@ -887,7 +887,8 @@ function skipQuestion() {
     dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
   }
   if (challengeActive) { challengeActive = false; challengeQIndex = 0; }
-  // 跳过不弹错误反馈，直接过渡
+  // 记录日志但不影响评分
+  logTimeSeries(false, '跳过');
   updateEnergyUI();
   updateDimUI();
   updateBottomBar();

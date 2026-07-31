@@ -542,6 +542,7 @@ function startGame() {
   $('bottom-bar').style.display = 'flex';
   $('main-area').style.display = 'flex';
   $('challenge-btn').style.display = 'none';
+  $('skip-btn').style.display = 'inline-block';
 
   updateEnergyUI();
   updateDimUI();
@@ -574,6 +575,7 @@ function loadQuestion() {
 }
 
 function renderQuestion() {
+  $('skip-btn').style.display = 'inline-block';
   const total = challengeActive ? `连击 ${challengeQIndex+1}/2` : '';
   $('q-label').textContent = `第 ${currentIdx+1} 题 ${total}`;
 
@@ -657,6 +659,7 @@ function startQuestionTimer() {
   hintGiven = false;
   skipShown = false;
   userHasInput = false;
+  $('skip-btn').style.display = 'inline-block';
   updateCountdownUI();
   questionTimerId = setInterval(() => {
     if (gamePhase !== 'PLAYING') return;
@@ -851,6 +854,7 @@ function submitAnswer() {
 function skipQuestion() {
   if (gamePhase !== 'PLAYING') return;
   stopQuestionTimer();
+  $('skip-btn').style.display = 'none';
   gamePhase = 'FEEDBACK';
   // 入错题本但不计入正确率
   wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'跳过', title:currentPoem.title, id:currentPoem.id});

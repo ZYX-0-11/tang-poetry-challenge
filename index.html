@@ -730,12 +730,14 @@ function startEnergyEngine() {
       sessionTotalSec++;
       if (state === 1) sessionFocusSec++;
     }
-    // 能量槽逼近专注力综合分（大差距快速追，小差距平滑追）
-    const target = calcFocusScore();
-    const gap = target - energy;
-    const step = Math.max(2, Math.abs(gap) * 0.3);
-    if (gap > 0) energy = Math.min(target, energy + step);
-    else if (gap < 0) energy = Math.max(target, energy - step);
+    // 能量槽仅在答题期间逼近专注力综合分（跳过/反馈/过渡期间冻结）
+    if (gamePhase === 'PLAYING') {
+      const target = calcFocusScore();
+      const gap = target - energy;
+      const step = Math.max(2, Math.abs(gap) * 0.3);
+      if (gap > 0) energy = Math.min(target, energy + step);
+      else if (gap < 0) energy = Math.max(target, energy - step);
+    }
     updateEnergyUI();
     // 挑战按钮：专注力 >= 90 且答题中（受试者主动点击）
     if (energy >= 90 && gamePhase === 'PLAYING' && !challengeActive) {

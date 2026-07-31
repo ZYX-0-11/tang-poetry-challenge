@@ -1193,7 +1193,7 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     consecutiveFrustration++;
     lastAnswerWasWrong = true;
     applyFrustrationPenalty();
-    updateMemoryScore(false);
+    updateMemoryScore(false, null, true);
     return;
   }
 
@@ -1273,19 +1273,26 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     applyFrustrationPenalty();
   }
 
-  // === 6. 记忆力：基于累计正确率 ===
-  updateMemoryScore(isCorrect);
+  // === 6. 记忆力：按逐字位置匹配累计 ===
+  updateMemoryScore(isCorrect, userAnswer, false);
 }
 
-function updateMemoryScore(isCorrect) {
-  const total = correctCount + errorCount;
-  if (total === 0) { dimScores.memory = 50; return; }
-  const acc = correctCount / total;
-  if (isCorrect) {
-    dimScores.memory = clamp(Math.round(acc * 100), 0, 100);
-  } else {
-    dimScores.memory = clamp(Math.round(acc * 100), 0, 100);
+function updateMemoryScore(isCorrect, userAnswer, isSkip) {
+  // 记忆力 = 累计位置正确率（直接反映逐字记忆能力）
+  // 跳过/超时不计算位置，统一-2（记忆不明）
+  if (isSkip || !userAnswer || userAnswer.length !== 5) {
+    dimScores.memory = clamp(dimScores.memory - 2, 0, 100);
+    return;
   }
+  const correctChars = [...currentPoem.lower];
+  const userChars = [...userAnswer];
+  let posMatch = 0;
+  for (let i = 0; i < 5; i++) {
+    if (userChars[i] === correctChars[i]) posMatch++;
+  }
+  // 按位置正确数调整：满5字+2 / 4字+1 / 3字+0 / 2字-1 / 1字-2 / 0字-3
+  const adj = posMatch - 3; // -3 ~ +2 区间
+  dimScores.memory = clamp(dimScores.memory + adj, 0, 100);
 }
 
 function updateDimUI() {

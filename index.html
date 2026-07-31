@@ -670,7 +670,7 @@ function onCharClick(ch, optIdx, btnEl) {
 
 function onSlotClick(idx) {
   if (gamePhase !== 'PLAYING') return;
-  for (let i=idx;i<5;i++) { selectedSlots[i]=null; slotSources[i]=null; }
+  selectedSlots[idx]=null; slotSources[idx]=null;
   renderQuestion();
 }
 

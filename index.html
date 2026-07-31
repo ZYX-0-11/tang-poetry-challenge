@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>唐诗飞花·脑电填空挑战</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+  background:#eef2f7;color:#2c3e50;min-height:100vh;
+  display:flex;flex-direction:column;user-select:none;
+}
+
+/* ===== 顶部状态栏 ===== */
+#top-bar{
+  position:sticky;top:0;z-index:100;
+  background:linear-gradient(135deg,#1a1a2e,#16213e);
+  color:#fff;padding:10px 20px;display:flex;
+  align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  box-shadow:0 2px 12px rgba(0,0,0,.3);
+}
+.energy-section{display:flex;align-items:center;gap:10px;min-width:240px}
+.energy-label{font-size:13px;font-weight:600;white-space:nowrap}
+.energy-bar-outer{flex:1;height:20px;background:rgba(255,255,255,.15);border-radius:10px;overflow:hidden;position:relative}
+.energy-bar-inner{height:100%;border-radius:10px;transition:width .4s ease,background .4s ease}
+.energy-val{font-size:14px;font-weight:700;min-width:44px;text-align:right}
+.energy-state{font-size:11px;padding:2px 10px;border-radius:10px;font-weight:600;text-align:center}
+.energy-state.focused{background:#27AE60}
+.energy-state.unfocused{background:#E74C3C}
+
+.dim-section{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.dim-item{text-align:center}
+.dim-name{font-size:10px;opacity:.7;margin-bottom:1px}
+.dim-val{font-size:18px;font-weight:700}
+.dim-total{font-size:20px;font-weight:800;color:#F39C12;margin-left:6px;padding-left:10px;border-left:1px solid rgba(255,255,255,.3)}
+
+/* 挑战按钮 */
+.challenge-btn{
+  background:linear-gradient(135deg,#F39C12,#E74C3C);color:#fff;border:none;
+  padding:6px 16px;border-radius:14px;font-size:13px;font-weight:700;
+  cursor:pointer;animation:pulse-glow 1s infinite;letter-spacing:2px;
+}
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 8px rgba(243,156,18,.5)}50%{box-shadow:0 0 20px rgba(231,76,60,.8)}}
+
+/* ===== 中间答题区 ===== */
+#main-area{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.question-card{
+  background:#fff;border-radius:20px;padding:32px 40px;
+  box-shadow:0 8px 40px rgba(0,0,0,.08);max-width:620px;width:100%;text-align:center;
+  position:relative;
+}
+.q-number{font-size:15px;color:#7f8c8d;margin-bottom:16px;font-weight:500}
+.q-hint{font-size:13px;color:#95a5a6;margin-bottom:4px;min-height:20px}
+.poem-upper{font-size:36px;font-weight:700;color:#2c3e50;letter-spacing:6px;margin-bottom:8px}
+
+.slots-row{display:flex;justify-content:center;gap:8px;margin-bottom:6px;min-height:56px;align-items:center}
+.slot{
+  width:54px;height:54px;border-radius:12px;border:2.5px dashed #d5dde5;
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;font-weight:700;color:#c0c7cf;cursor:pointer;transition:all .15s
+}
+.slot.filled{border-style:solid;border-color:#4A90D9;background:#eaf3fb;color:#2c3e50}
+.slot:hover{border-color:#4A90D9}
+
+.countdown-wrap{margin:14px 0 16px}
+.countdown-ring{display:inline-block;width:64px;height:64px;border-radius:50%;border:4px solid #e8ecf0;display:flex;align-items:center;justify-content:center}
+.countdown-num{font-size:30px;font-weight:800;color:#4A90D9;transition:color .3s}
+.countdown-num.urgent{color:#E74C3C;animation:pulse .6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.char-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 auto 20px;max-width:420px}
+.char-btn{
+  height:56px;border-radius:14px;border:2px solid #e0e5ec;background:#fff;
+  font-size:24px;font-weight:700;color:#2c3e50;cursor:pointer;transition:all .12s
+}
+.char-btn:hover{border-color:#4A90D9;background:#f0f6fc;transform:translateY(-2px);box-shadow:0 4px 12px rgba(74,144,217,.2)}
+.char-btn:active{transform:scale(.95)}
+.char-btn.used{background:#eee;color:#ccc;border-color:#eee;cursor:not-allowed;pointer-events:none}
+/* 简单模式大字体 */
+.char-btn.easy-mode{font-size:30px;height:62px}
+
+.submit-btn{
+  width:100%;max-width:280px;height:48px;border:none;border-radius:14px;
+  background:#4A90D9;color:#fff;font-size:19px;font-weight:700;
+  cursor:pointer;transition:all .15s;letter-spacing:4px;
+}
+.submit-btn:hover:not(:disabled){background:#357ABD;transform:translateY(-1px);box-shadow:0 4px 16px rgba(74,144,217,.35)}
+.submit-btn:disabled{background:#c0c7cf;cursor:not-allowed}
+.clear-btn{display:inline-block;margin-top:8px;font-size:13px;color:#95a5a6;cursor:pointer;text-decoration:underline;background:none;border:none}
+
+/* 反馈浮层 */
+.feedback-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  z-index:200;pointer-events:none;opacity:0;transition:opacity .25s
+}
+.feedback-overlay.show{opacity:1}
+.feedback-badge{font-size:52px;font-weight:900;padding:18px 44px;border-radius:22px}
+.feedback-badge.correct{background:rgba(39,174,96,.9);color:#fff}
+.feedback-badge.wrong{background:rgba(231,76,60,.9);color:#fff}
+
+/* ===== 暖色冻结遮罩 ===== */
+.freeze-warm-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(255,240,220,.85);z-index:150;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;
+}
+.freeze-breathe-circle{
+  width:100px;height:100px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,180,120,.6),rgba(255,140,80,.3));
+  animation:breathe 3s ease-in-out infinite;
+}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.25);opacity:1}}
+.freeze-text{
+  font-size:22px;font-weight:700;color:#c0392b;text-align:center;
+  max-width:400px;line-height:1.6;
+}
+.freeze-sub{font-size:14px;color:#a04030}
+.freeze-dismiss-btn{
+  margin-top:16px;padding:10px 32px;border:none;border-radius:12px;
+  background:#c0392b;color:#fff;font-size:16px;font-weight:700;cursor:pointer;
+}
+.freeze-toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:rgba(192,57,43,.9);color:#fff;padding:10px 24px;
+  border-radius:20px;font-size:15px;z-index:160;opacity:0;transition:opacity .3s;
+}
+.freeze-toast.show{opacity:1}
+
+/* ===== 底部辅助栏 ===== */
+#bottom-bar{
+  background:#fff;border-top:1px solid #e8ecf0;padding:10px 20px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:13px;color:#7f8c8d;flex-wrap:wrap;
+}
+.progress-section{display:flex;align-items:center;gap:8px}
+.progress-bar-outer{width:120px;height:8px;background:#e8ecf0;border-radius:4px;overflow:hidden}
+.progress-bar-inner{height:100%;border-radius:4px;background:#4A90D9;transition:width .4s}
+.error-book{color:#E74C3C;font-weight:600;cursor:pointer}
+.cooldown-info{color:#95a5a6;font-size:12px}
+
+/* ===== 模拟状态切换（开发用） ===== */
+.sim-toggle{
+  position:fixed;top:4px;right:8px;z-index:500;font-size:11px;
+  background:rgba(0,0,0,.55);color:#fff;padding:4px 10px;
+  border-radius:8px;pointer-events:none;
+}
+
+/* ===== 开始/结束 覆盖层 ===== */
+.overlay-screen{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,.7);z-index:300;
+  display:flex;align-items:center;justify-content:center;
+}
+.overlay-card{
+  background:#fff;border-radius:24px;padding:40px 36px;max-width:560px;
+  width:92%;text-align:center;box-shadow:0 12px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;
+}
+.overlay-card h1{font-size:30px;margin-bottom:6px}
+.overlay-card h2{font-size:18px;margin-bottom:16px;color:#555}
+.overlay-card .subtitle{font-size:14px;color:#7f8c8d;margin-bottom:20px;line-height:1.8}
+.overlay-card .rules{text-align:left;font-size:13px;color:#555;line-height:2;margin-bottom:20px;padding:14px 18px;background:#f8f9fa;border-radius:12px}
+.start-btn{
+  padding:14px 56px;font-size:21px;font-weight:700;border:none;
+  border-radius:16px;background:#4A90D9;color:#fff;cursor:pointer;
+  letter-spacing:4px;transition:all .15s;
+}
+.start-btn:hover{background:#357ABD;transform:translateY(-2px);box-shadow:0 6px 20px rgba(74,144,217,.4)}
+
+/* 结果页 */
+.result-stats{display:flex;justify-content:center;gap:24px;margin:12px 0}
+.result-stat{text-align:center}
+.result-stat .val{font-size:32px;font-weight:800;color:#2c3e50}
+.result-stat .lbl{font-size:12px;color:#7f8c8d}
+.wrong-list{text-align:left;max-height:140px;overflow-y:auto;margin:12px 0;font-size:13px;color:#555;line-height:2}
+.wrong-list li{padding:2px 0}
+.history-chart-wrap{margin:16px 0}
+.history-chart-wrap canvas{max-width:100%}
+.tab-bar{display:flex;gap:8px;justify-content:center;margin-bottom:16px}
+.tab-btn{
+  padding:8px 20px;border:2px solid #4A90D9;border-radius:10px;
+  background:#fff;color:#4A90D9;font-size:14px;font-weight:600;cursor:pointer;
+}
+.tab-btn.active{background:#4A90D9;color:#fff}
+.export-btn{
+  margin-top:12px;padding:10px 24px;border:2px solid #27AE60;border-radius:10px;
+  background:#fff;color:#27AE60;font-size:14px;font-weight:600;cursor:pointer;
+}
+.export-btn:hover{background:#27AE60;color:#fff}
+
+@media(max-width:640px){
+  #top-bar{flex-direction:column;gap:8px;padding:8px 12px}
+  .question-card{padding:20px 14px}
+  .poem-upper{font-size:24px;letter-spacing:3px}
+  .char-btn{height:48px;font-size:20px}
+  .char-btn.easy-mode{font-size:26px;height:54px}
+  .slot{width:44px;height:44px;font-size:22px}
+  #bottom-bar{font-size:11px;padding:8px 12px}
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部状态栏 -->
+<header id="top-bar">
+  <div class="energy-section">
+    <span class="energy-label">专注力</span>
+    <div class="energy-bar-outer">
+      <div id="energy-bar" class="energy-bar-inner" style="width:85%;background:#4A90D9"></div>
+    </div>
+    <span id="energy-val" class="energy-val">85%</span>
+    <span id="energy-state" class="energy-state focused">专注</span>
+    <button class="challenge-btn" id="challenge-btn" style="display:none">突破极限，挑战双题？</button>
+  </div>
+  <div class="dim-section">
+    <div class="dim-item"><div class="dim-name">专注</div><div id="dim-focus" class="dim-val">85</div></div>
+    <div class="dim-item"><div class="dim-name">自主</div><div id="dim-autonomy" class="dim-val">80</div></div>
+    <div class="dim-item"><div class="dim-name">反应</div><div id="dim-reaction" class="dim-val">85</div></div>
+    <div class="dim-item"><div class="dim-name">逻辑</div><div id="dim-logic" class="dim-val">75</div></div>
+    <div class="dim-item"><div class="dim-name">调适</div><div id="dim-adaptation" class="dim-val">70</div></div>
+    <div class="dim-total">总分 <span id="dim-total">79</span></div>
+  </div>
+</header>
+
+<!-- 模拟状态切换（开发用） -->
+<div class="sim-toggle" id="sim-toggle" title="当前状态（由答题总分判定：≥70专注，<70走神）">
+  状态: <span id="sim-label">自动判定中</span>
+</div>
+
+<!-- 中间答题区 -->
+<div id="main-area">
+  <div class="question-card" id="question-card">
+    <div class="q-number" id="q-label">第 1 题</div>
+    <div class="q-hint" id="q-hint"></div>
+    <div class="poem-upper" id="poem-upper"></div>
+
+    <div class="slots-row" id="slots-row"></div>
+
+    <div class="countdown-wrap">
+      <div class="countdown-ring"><span id="countdown-num" class="countdown-num">8</span></div>
+    </div>
+
+    <div class="char-grid" id="char-grid"></div>
+
+    <button class="submit-btn" id="submit-btn" disabled>确认提交</button>
+    <br><span class="clear-btn" id="clear-btn" style="display:none">撤销上字</span>
+  </div>
+</div>
+
+<!-- 反馈浮层 -->
+<div class="feedback-overlay" id="feedback-overlay"><div class="feedback-badge" id="feedback-badge"></div></div>
+
+<!-- 暖色冻结遮罩 -->
+<div id="freeze-warm-overlay" style="display:none"></div>
+<div class="freeze-toast" id="freeze-toast"></div>
+
+<!-- 底部辅助栏 -->
+<footer id="bottom-bar">
+  <div class="progress-section">
+    <span>进度</span>
+    <div class="progress-bar-outer"><div id="progress-bar" class="progress-bar-inner" style="width:0%"></div></div>
+    <span id="progress-text">0 / 20 题</span>
+  </div>
+  <span class="error-book" id="error-book-btn">错题本(<span id="error-count">0</span>)</span>
+  <span class="cooldown-info" id="cooldown-info"></span>
+</footer>
+
+<!-- 开始界面 -->
+<div class="overlay-screen" id="start-screen">
+  <div class="overlay-card">
+    <h1>唐诗飞花</h1>
+    <h2>脑电填空挑战</h2>
+    <div class="subtitle">根据上句选出正确的五言下句<br>每题 8 秒，保持专注获取高分</div>
+    <div class="rules">
+      规则说明：<br>
+      1. 屏幕显示五言唐诗上句，从下方选字组成下句<br>
+      2. 每题固定 8 秒倒计时，超时算错<br>
+      3. 专注时能量槽上涨，走神时下降<br>
+      4. 能量归零或连错 3 次触发暖色休整提示<br>
+      5. 能量满 100 可主动挑战双题连击<br>
+      6. 点击已填槽位可撤销，共 20 题
+    </div>
+    <button class="start-btn" id="start-btn">开始挑战</button>
+  </div>
+</div>
+
+<!-- 结果 + 历史界面 -->
+<div class="overlay-screen" id="result-screen" style="display:none">
+  <div class="overlay-card">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="result">本次成绩</button>
+      <button class="tab-btn" data-tab="history">历史对比</button>
+    </div>
+    <div id="tab-result">
+      <h1>挑战完成</h1>
+      <div class="result-stats">
+        <div class="result-stat"><div class="val" id="res-correct">0</div><div class="lbl">正确</div></div>
+        <div class="result-stat"><div class="val" id="res-score">0</div><div class="lbl">总分</div></div>
+        <div class="result-stat"><div class="val" id="res-time">0s</div><div class="lbl">平均用时</div></div>
+        <div class="result-stat"><div class="val" id="res-freeze">0</div><div class="lbl">休整次数</div></div>
+      </div>
+      <canvas id="radar-canvas" width="280" height="280" style="max-width:240px"></canvas>
+      <h3>错题本</h3>
+      <ul class="wrong-list" id="wrong-list"></ul>
+      <button class="export-btn" id="export-csv-btn">导出 CSV</button>
+    </div>
+    <div id="tab-history" style="display:none">
+      <h2>15天能力变化</h2>
+      <div class="history-chart-wrap"><canvas id="history-canvas" width="500" height="280"></canvas></div>
+      <div style="font-size:12px;color:#95a5a6;margin-top:8px" id="history-empty"></div>
+    </div>
+    <button class="start-btn" id="restart-btn" style="margin-top:16px">再来一局</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 配置常量
+// ============================================================
+const CFG = {
+  TIME_PER_Q: 8,           // 固定8秒
+  FREEZE_SEC: 5,           // 休整5秒
+  COOLDOWN_SEC: 30,        // 冷却30秒
+  REACTION_BASE: 3.0,      // 反应力基准线(秒)
+  TOTAL_Q: 20,
+};
+
+// ============================================================
+// 全局状态
+// ============================================================
+let POETRY_DB = [];
+let questions = [];
+let currentIdx = 0;
+let score = 0;
+let correctCount = 0;
+let errorCount = 0;
+let consecutiveErrors = 0;
+let freezeCount = 0;
+let freezeCooldownRemain = 0;
+let freezeRecoveryFlag = false;   // 冻结恢复后第一题
+let recentResults = [];            // 最近5题对错记录 (true=对)
+let eegState = 1;                 // 1=专注 0=走神
+let hardwareEEGActive = false;    // 是否已接入真实脑电硬件
+function computeState() {
+  // 硬件模式：直接使用 EEGReceiver 推送的真实 state
+  if (hardwareEEGActive) return eegState;
+  const total = correctCount + errorCount;
+  if (total === 0) return 1;           // 尚未答题 → 专注
+  if (total <= 2) return correctCount > 0 ? 1 : 0;  // 前2题有对→专注，全错→走神
+  // 近5题正确率 >= 50% → 专注
+  const recent = recentResults.slice(-5);
+  const recentCorrect = recent.filter(r => r).length;
+  return recentCorrect / recent.length >= 0.5 ? 1 : 0;
+}
+let energy = 50;
+let timerSec = CFG.TIME_PER_Q;
+let questionTimerId = null;
+let energyTimerId = null;
+let freezeTimerId = null;
+let cooldownTimerId = null;
+let selectedSlots = [null,null,null,null,null];
+let slotSources = [null,null,null,null,null];
+let charOptions = [];
+let currentPoem = null;
+let gamePhase = 'START';          // START|PLAYING|FEEDBACK|TRANSITION|FROZEN|FINISHED
+let challengeActive = false;      // 双题连击模式
+let challengeQIndex = 0;          // 连击中的第几题 (0 or 1)
+let wrongBook = [];
+let responseTimes = [];
+let questionRecords = [];          // {isCorrect, elapsed, stateAtAnswer}
+let sessionFocusSec = 0;           // 全程专注秒数（能量引擎累计）
+let sessionTotalSec = 0;           // 全程总秒数（能量引擎累计）
+let difficultyMode = 'normal';    // 'normal' | 'easy'
+let prevStateWasUnfocused = false;
+let dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70};
+// 自主学习追踪
+let wrongQIds = new Set();        // 错过的题目id
+let retryResults = {};            // {poemId: 'breakthrough'|'repeat'}
+// 心理调适
+let freezeRecoveryQAnswered = false;
+// 连击
+let challengeStreak = 0;
+// 时间序列记录(用于CSV)
+let timeSeriesLog = [];
+let sessionStartTime = null;
+
+// ============================================================
+// DOM 引用
+// ============================================================
+const $ = id => document.getElementById(id);
+
+// ============================================================
+// 题库加载
+// ============================================================
+async function loadDB() {
+  try {
+    const resp = await fetch('poetry_db.json');
+    POETRY_DB = await resp.json();
+  } catch(e) {
+    console.warn('题库加载失败，使用内置题库');
+    POETRY_DB = getBuiltinDB();
+  }
+}
+function getBuiltinDB() {
+  return [
+    {id:1,upper:"床前明月光",lower:"疑是地上霜",title:"静夜思",author:"李白"},
+    {id:2,upper:"举头望明月",lower:"低头思故乡",title:"静夜思",author:"李白"},
+    {id:3,upper:"白日依山尽",lower:"黄河入海流",title:"登鹳雀楼",author:"王之涣"},
+    {id:4,upper:"欲穷千里目",lower:"更上一层楼",title:"登鹳雀楼",author:"王之涣"},
+    {id:5,upper:"春眠不觉晓",lower:"处处闻啼鸟",title:"春晓",author:"孟浩然"},
+    {id:6,upper:"夜来风雨声",lower:"花落知多少",title:"春晓",author:"孟浩然"},
+    {id:7,upper:"锄禾日当午",lower:"汗滴禾下土",title:"悯农",author:"李绅"},
+    {id:8,upper:"谁知盘中餐",lower:"粒粒皆辛苦",title:"悯农",author:"李绅"},
+    {id:9,upper:"春种一粒粟",lower:"秋收万颗子",title:"悯农",author:"李绅"},
+    {id:10,upper:"四海无闲田",lower:"农夫犹饿死",title:"悯农",author:"李绅"},
+    {id:11,upper:"千山鸟飞绝",lower:"万径人踪灭",title:"江雪",author:"柳宗元"},
+    {id:12,upper:"孤舟蓑笠翁",lower:"独钓寒江雪",title:"江雪",author:"柳宗元"},
+    {id:13,upper:"危楼高百尺",lower:"手可摘星辰",title:"夜宿山寺",author:"李白"},
+    {id:14,upper:"不敢高声语",lower:"恐惊天上人",title:"夜宿山寺",author:"李白"},
+    {id:15,upper:"红豆生南国",lower:"春来发几枝",title:"相思",author:"王维"},
+    {id:16,upper:"愿君多采撷",lower:"此物最相思",title:"相思",author:"王维"},
+    {id:17,upper:"松下问童子",lower:"言师采药去",title:"寻隐者不遇",author:"贾岛"},
+    {id:18,upper:"只在此山中",lower:"云深不知处",title:"寻隐者不遇",author:"贾岛"},
+    {id:19,upper:"远看山有色",lower:"近听水无声",title:"画",author:"王维"},
+    {id:20,upper:"春去花还在",lower:"人来鸟不惊",title:"画",author:"王维"},
+    {id:21,upper:"小娃撑小艇",lower:"偷采白莲回",title:"池上",author:"白居易"},
+    {id:22,upper:"不解藏踪迹",lower:"浮萍一道开",title:"池上",author:"白居易"},
+    {id:23,upper:"离离原上草",lower:"一岁一枯荣",title:"草",author:"白居易"},
+    {id:24,upper:"野火烧不尽",lower:"春风吹又生",title:"草",author:"白居易"},
+    {id:25,upper:"迟日江山丽",lower:"春风花草香",title:"绝句",author:"杜甫"},
+    {id:26,upper:"泥融飞燕子",lower:"沙暖睡鸳鸯",title:"绝句",author:"杜甫"},
+    {id:27,upper:"空山不见人",lower:"但闻人语响",title:"鹿柴",author:"王维"},
+    {id:28,upper:"返景入深林",lower:"复照青苔上",title:"鹿柴",author:"王维"},
+    {id:29,upper:"众鸟高飞尽",lower:"孤云独去闲",title:"独坐敬亭山",author:"李白"},
+    {id:30,upper:"相看两不厌",lower:"只有敬亭山",title:"独坐敬亭山",author:"李白"},
+    {id:31,upper:"会当凌绝顶",lower:"一览众山小",title:"望岳",author:"杜甫"},
+    {id:32,upper:"国破山河在",lower:"城春草木深",title:"春望",author:"杜甫"},
+    {id:33,upper:"感时花溅泪",lower:"恨别鸟惊心",title:"春望",author:"杜甫"},
+    {id:34,upper:"烽火连三月",lower:"家书抵万金",title:"春望",author:"杜甫"},
+    {id:35,upper:"空山新雨后",lower:"天气晚来秋",title:"山居秋暝",author:"王维"},
+    {id:36,upper:"明月松间照",lower:"清泉石上流",title:"山居秋暝",author:"王维"},
+    {id:37,upper:"大漠孤烟直",lower:"长河落日圆",title:"使至塞上",author:"王维"},
+    {id:38,upper:"海内存知己",lower:"天涯若比邻",title:"送杜少府之任蜀州",author:"王勃"},
+    {id:39,upper:"海日生残夜",lower:"江春入旧年",title:"次北固山下",author:"王湾"},
+    {id:40,upper:"曲径通幽处",lower:"禅房花木深",title:"题破山寺后禅院",author:"常建"},
+    {id:41,upper:"山随平野尽",lower:"江入大荒流",title:"渡荆门送别",author:"李白"},
+    {id:42,upper:"绿树村边合",lower:"青山郭外斜",title:"过故人庄",author:"孟浩然"},
+    {id:43,upper:"开轩面场圃",lower:"把酒话桑麻",title:"过故人庄",author:"孟浩然"},
+    {id:44,upper:"星垂平野阔",lower:"月涌大江流",title:"旅夜书怀",author:"杜甫"},
+    {id:45,upper:"吴楚东南坼",lower:"乾坤日夜浮",title:"登岳阳楼",author:"杜甫"},
+    {id:46,upper:"浮云游子意",lower:"落日故人情",title:"送友人",author:"李白"},
+    {id:47,upper:"举杯邀明月",lower:"对影成三人",title:"月下独酌",author:"李白"},
+    {id:48,upper:"大漠沙如雪",lower:"燕山月似钩",title:"马诗",author:"李贺"},
+    {id:49,upper:"随风潜入夜",lower:"润物细无声",title:"春夜喜雨",author:"杜甫"},
+    {id:50,upper:"野径云俱黑",lower:"江船火独明",title:"春夜喜雨",author:"杜甫"}
+  ];
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function shuffle(arr) { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
+function clamp(v,l,h){return Math.max(l,Math.min(h,v))}
+
+// ============================================================
+// 选项生成（支持难度调节）
+// ============================================================
+function buildCharOptions(poem, difficulty) {
+  const correctChars = [...poem.lower];
+  const allChars = new Set();
+  POETRY_DB.forEach(p => { [...p.lower].forEach(c => allChars.add(c)); });
+  const correctSet = new Set(correctChars);
+  const pool = [...allChars].filter(c => !correctSet.has(c));
+  const nDistractors = difficulty === 'easy' ? 1 : 3;
+  const distractors = shuffle(pool).slice(0, nDistractors);
+  return shuffle([...correctChars, ...distractors]);
+}
+
+// ============================================================
+// 游戏流程
+// ============================================================
+function pickQuestions() {
+  return shuffle(POETRY_DB).slice(0, CFG.TOTAL_Q);
+}
+
+function startGame() {
+  questions = pickQuestions();
+  currentIdx = 0;
+  score = 0;
+  correctCount = 0;
+  errorCount = 0;
+  consecutiveErrors = 0;
+  freezeCount = 0;
+  freezeCooldownRemain = 0;
+  freezeRecoveryFlag = false;
+  freezeRecoveryQAnswered = false;
+  eegState = 1;
+  energy = 50;
+  challengeActive = false;
+  challengeQIndex = 0;
+  challengeStreak = 0;
+  wrongBook = [];
+  responseTimes = [];
+  questionRecords = [];
+  recentResults = [];
+  sessionFocusSec = 0;
+  sessionTotalSec = 0;
+  difficultyMode = 'normal';
+  prevStateWasUnfocused = false;
+  dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70};
+  wrongQIds = new Set();
+  retryResults = {};
+  timeSeriesLog = [];
+  sessionStartTime = Date.now();
+  gamePhase = 'PLAYING';
+
+  $('start-screen').style.display = 'none';
+  $('result-screen').style.display = 'none';
+  $('top-bar').style.display = 'flex';
+  $('bottom-bar').style.display = 'flex';
+  $('main-area').style.display = 'flex';
+  $('challenge-btn').style.display = 'none';
+
+  updateEnergyUI();
+  updateDimUI();
+  updateBottomBar();
+  loadQuestion();
+  startEnergyEngine();
+  startCooldownTicker();
+}
+
+function loadQuestion() {
+  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  currentPoem = questions[currentIdx];
+  selectedSlots = [null,null,null,null,null];
+  slotSources = [null,null,null,null,null];
+  timerSec = CFG.TIME_PER_Q;
+
+  // 题间难度调整：上一轮走神 → 降低难度
+  if (prevStateWasUnfocused && difficultyMode === 'normal') {
+    difficultyMode = 'easy';
+  } else if (!prevStateWasUnfocused && difficultyMode === 'easy') {
+    difficultyMode = 'normal';
+  }
+  prevStateWasUnfocused = false;
+
+  charOptions = buildCharOptions(currentPoem, difficultyMode);
+  gamePhase = 'PLAYING';
+  renderQuestion();
+  updateBottomBar();
+  startQuestionTimer();
+}
+
+function renderQuestion() {
+  const total = challengeActive ? `连击 ${challengeQIndex+1}/2` : '';
+  $('q-label').textContent = `第 ${currentIdx+1} 题 ${total}`;
+
+  // 难度提示
+  if (difficultyMode === 'easy') {
+    $('q-hint').textContent = '慢慢来，看清再选';
+    $('q-hint').style.color = '#F39C12';
+  } else {
+    $('q-hint').textContent = '';
+  }
+
+  $('poem-upper').textContent = currentPoem.upper;
+
+  // 槽位
+  const slotsRow = $('slots-row');
+  slotsRow.innerHTML = '';
+  for (let i=0;i<5;i++) {
+    const div = document.createElement('div');
+    div.className = 'slot'+(selectedSlots[i]?' filled':'');
+    div.dataset.idx = i;
+    div.textContent = selectedSlots[i]||'';
+    div.addEventListener('click',()=>onSlotClick(i));
+    slotsRow.appendChild(div);
+  }
+
+  // 选项按钮
+  const grid = $('char-grid');
+  grid.innerHTML = '';
+  const isEasy = difficultyMode === 'easy';
+  if (isEasy) grid.style.gridTemplateColumns = 'repeat(3,1fr)';
+  else grid.style.gridTemplateColumns = 'repeat(4,1fr)';
+
+  charOptions.forEach((ch, optIdx) => {
+    const btn = document.createElement('button');
+    btn.className = 'char-btn' + (isEasy ? ' easy-mode' : '');
+    btn.textContent = ch;
+    btn.dataset.optIdx = optIdx;
+    if (slotSources.includes(optIdx)) btn.classList.add('used');
+    btn.addEventListener('click', ()=>onCharClick(ch, optIdx, btn));
+    grid.appendChild(btn);
+  });
+
+  $('submit-btn').disabled = selectedSlots.some(s=>s===null);
+  $('clear-btn').style.display = selectedSlots.some(s=>s) ? 'inline-block':'none';
+  updateCountdownUI();
+}
+
+function onCharClick(ch, optIdx, btnEl) {
+  if (gamePhase !== 'PLAYING') return;
+  if (slotSources.includes(optIdx)) return;
+  const emptyIdx = selectedSlots.findIndex(s=>s===null);
+  if (emptyIdx===-1) return;
+  selectedSlots[emptyIdx] = ch;
+  slotSources[emptyIdx] = optIdx;
+  renderQuestion();
+}
+
+function onSlotClick(idx) {
+  if (gamePhase !== 'PLAYING') return;
+  for (let i=idx;i<5;i++) { selectedSlots[i]=null; slotSources[i]=null; }
+  renderQuestion();
+}
+
+function removeLastChar() {
+  if (gamePhase !== 'PLAYING') return;
+  const last = selectedSlots.reduce((l,s,i)=>s?i:l,-1);
+  if (last===-1) return;
+  selectedSlots[last]=null;
+  slotSources[last]=null;
+  renderQuestion();
+}
+
+// ============================================================
+// 计时器
+// ============================================================
+function startQuestionTimer() {
+  stopQuestionTimer();
+  timerSec = CFG.TIME_PER_Q;
+  updateCountdownUI();
+  questionTimerId = setInterval(() => {
+    if (gamePhase !== 'PLAYING') return;
+    timerSec = Math.max(0, timerSec - 0.1);
+    updateCountdownUI();
+    if (timerSec <= 0) handleTimeout();
+  }, 100);
+}
+
+function stopQuestionTimer() {
+  if (questionTimerId) { clearInterval(questionTimerId); questionTimerId = null; }
+}
+
+function updateCountdownUI() {
+  const sec = Math.ceil(timerSec);
+  const el = $('countdown-num');
+  el.textContent = sec;
+  el.classList.toggle('urgent', sec <= 3);
+}
+
+// ============================================================
+// 能量引擎
+// ============================================================
+function startEnergyEngine() {
+  stopEnergyEngine();
+  energyTimerId = setInterval(() => {
+    const state = computeState();
+    eegState = state;
+    // 全程统计（用于模块一脑电分）
+    if (gamePhase === 'PLAYING') {
+      sessionTotalSec++;
+      if (state === 1) sessionFocusSec++;
+    }
+    // 能量槽逼近专注力综合分（大差距快速追，小差距平滑追）
+    const target = calcFocusScore();
+    const gap = target - energy;
+    const step = Math.max(2, Math.abs(gap) * 0.3);
+    if (gap > 0) energy = Math.min(target, energy + step);
+    else if (gap < 0) energy = Math.max(target, energy - step);
+    updateEnergyUI();
+    // 挑战按钮：专注力 >= 90 且答题中
+    if (energy >= 90 && gamePhase === 'PLAYING' && !challengeActive) {
+      $('challenge-btn').style.display = 'inline-block';
+    } else {
+      $('challenge-btn').style.display = 'none';
+    }
+    // 专注力极低触发休整
+    if (energy <= 15 && gamePhase === 'PLAYING' && freezeCooldownRemain <= 0 && consecutiveErrors < 3) {
+      triggerFreeze();
+    }
+  }, 1000);
+}
+
+function stopEnergyEngine() {
+  if (energyTimerId) { clearInterval(energyTimerId); energyTimerId = null; }
+}
+
+function updateEnergyUI() {
+  const pct = Math.round(energy);
+  $('energy-val').textContent = pct+'分';
+  const bar = $('energy-bar');
+  bar.style.width = pct+'%';
+  const r = Math.round(231-(231-74)*(pct/100));
+  const g = Math.round(76+(144-76)*(pct/100));
+  const b = Math.round(60+(217-60)*(pct/100));
+  bar.style.background = `rgb(${r},${g},${b})`;
+  const st = $('energy-state');
+  const state = computeState();
+  st.textContent = state===1?'专注':'涣散';
+  st.className = 'energy-state '+(state===1?'focused':'unfocused');
+  const sl = $('sim-label');
+  if (hardwareEEGActive) {
+    if (sl) sl.textContent = '硬件 EEG';
+  } else {
+    if (sl) sl.textContent = '行为判定';
+  }
+}
+
+// ============================================================
+// 冷却计时器
+// ============================================================
+function startCooldownTicker() {
+  if (cooldownTimerId) clearInterval(cooldownTimerId);
+  cooldownTimerId = setInterval(() => {
+    if (freezeCooldownRemain > 0) {
+      freezeCooldownRemain = Math.max(0, freezeCooldownRemain - 1);
+      updateBottomBar();
+      if (freezeCooldownRemain === 0) $('cooldown-info').textContent = '';
+    }
+  }, 1000);
+}
+
+// ============================================================
+// 提交 & 超时
+// ============================================================
+function submitAnswer() {
+  if (gamePhase !== 'PLAYING') return;
+  if (selectedSlots.some(s=>s===null)) return;
+
+  stopQuestionTimer();
+  gamePhase = 'FEEDBACK';
+  const userAnswer = selectedSlots.join('');
+  const elapsed = CFG.TIME_PER_Q - timerSec;
+  responseTimes.push(elapsed);
+  questionRecords.push({isCorrect: userAnswer === currentPoem.lower, elapsed, stateAtAnswer: computeState()});
+  const isCorrect = userAnswer === currentPoem.lower;
+
+  logTimeSeries(isCorrect, userAnswer);
+
+  if (isCorrect) {
+    correctCount++;
+    recentResults.push(true);
+    consecutiveErrors = 0;
+    const speedBonus = elapsed < CFG.REACTION_BASE ? 2 : 1;
+    const multi = challengeActive ? 3 : 1;
+    score += (10 + speedBonus) * multi;
+    challengeStreak++;
+    showFeedback(true);
+  } else {
+    errorCount++;
+    recentResults.push(false);
+    consecutiveErrors++;
+    score = Math.max(0, score - (challengeActive ? 3 : 5));
+    challengeStreak = 0;
+    wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer, title:currentPoem.title, id:currentPoem.id});
+    showFeedback(false);
+  }
+
+  // 自主学习追踪
+  const pid = currentPoem.id;
+  if (wrongQIds.has(pid)) {
+    retryResults[pid] = isCorrect ? 'breakthrough' : 'repeat';
+  }
+  if (!isCorrect) wrongQIds.add(pid);
+
+  updateDimScores(isCorrect, elapsed);
+  updateEnergyUI();
+  updateDimUI();
+  updateBottomBar();
+
+  // 冻结恢复后第一题 → 心理调适计分
+  if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
+    freezeRecoveryQAnswered = true;
+    if (isCorrect) {
+      dimScores.adaptation = clamp(dimScores.adaptation + (elapsed < 4 ? 15 : 5), 25, 100);
+    } else {
+      dimScores.adaptation = clamp(dimScores.adaptation - 5, 25, 100);
+    }
+    updateDimUI();
+  }
+
+  // 检查连击完成
+  if (challengeActive) {
+    if (challengeQIndex === 0) {
+      // 连击第一题完成，立即加载第二题
+      challengeQIndex = 1;
+      setTimeout(() => loadNextInChallenge(), 500);
+      return;
+    } else {
+      // 连击第二题完成
+      challengeActive = false;
+      challengeQIndex = 0;
+    }
+  }
+
+  // 检查冻结
+  if ((energy <= 0 || consecutiveErrors >= 3) && freezeCooldownRemain <= 0) {
+    setTimeout(() => triggerFreeze(), 600);
+  } else {
+    setTimeout(() => goNextQuestion(), 900);
+  }
+}
+
+function handleTimeout() {
+  stopQuestionTimer();
+  gamePhase = 'FEEDBACK';
+  errorCount++;
+  recentResults.push(false);
+  consecutiveErrors++;
+  score = Math.max(0, score - 5);
+  responseTimes.push(CFG.TIME_PER_Q);
+  questionRecords.push({isCorrect: false, elapsed: CFG.TIME_PER_Q, stateAtAnswer: computeState()});
+  challengeStreak = 0;
+  wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'超时未答', title:currentPoem.title, id:currentPoem.id});
+
+  const pid = currentPoem.id;
+  if (wrongQIds.has(pid)) retryResults[pid] = 'repeat';
+  wrongQIds.add(pid);
+
+  showFeedback(false);
+  updateDimScores(false, CFG.TIME_PER_Q);
+  updateEnergyUI();
+  updateDimUI();
+  updateBottomBar();
+
+  if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
+    freezeRecoveryQAnswered = true;
+    dimScores.adaptation = clamp(dimScores.adaptation - 5, 25, 100);
+    updateDimUI();
+  }
+
+  if (challengeActive) {
+    challengeActive = false;
+    challengeQIndex = 0;
+    energy = Math.max(30, energy - 30);
+  }
+
+  if ((energy <= 0 || consecutiveErrors >= 3) && freezeCooldownRemain <= 0) {
+    setTimeout(() => triggerFreeze(), 600);
+  } else {
+    setTimeout(() => goNextQuestion(), 900);
+  }
+}
+
+function loadNextInChallenge() {
+  currentIdx++;
+  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  currentPoem = questions[currentIdx];
+  selectedSlots = [null,null,null,null,null];
+  slotSources = [null,null,null,null,null];
+  timerSec = CFG.TIME_PER_Q;
+  charOptions = buildCharOptions(currentPoem, difficultyMode);
+  gamePhase = 'PLAYING';
+  renderQuestion();
+  updateBottomBar();
+  startQuestionTimer();
+}
+
+function goNextQuestion() {
+  gamePhase = 'TRANSITION';
+  currentIdx++;
+  if (currentIdx >= CFG.TOTAL_Q) { endGame(); return; }
+  loadQuestion();
+}
+
+function showFeedback(isCorrect) {
+  $('feedback-badge').textContent = isCorrect ? '✓ 正确' : '✗ 错误';
+  $('feedback-badge').className = 'feedback-badge '+(isCorrect?'correct':'wrong');
+  $('feedback-overlay').classList.add('show');
+  setTimeout(()=>$('feedback-overlay').classList.remove('show'), 700);
+}
+
+// ============================================================
+// 双题连击
+// ============================================================
+function activateChallenge() {
+  if (gamePhase !== 'PLAYING' || energy < 100 || challengeActive) return;
+  challengeActive = true;
+  challengeQIndex = 0;
+  challengeStreak = 0;
+  $('challenge-btn').style.display = 'none';
+  updateEnergyUI();
+  // 加载连击第一题（替换当前题）
+  currentPoem = questions[currentIdx];
+  selectedSlots = [null,null,null,null,null];
+  slotSources = [null,null,null,null,null];
+  timerSec = CFG.TIME_PER_Q;
+  charOptions = buildCharOptions(currentPoem, difficultyMode);
+  renderQuestion();
+  startQuestionTimer();
+  console.log('双题连击已激活!');
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'challenge-btn') activateChallenge();
+});
+
+// ============================================================
+// 暖色冻结（新版）
+// ============================================================
+function triggerFreeze() {
+  if (freezeCooldownRemain > 0) return;
+  gamePhase = 'FROZEN';
+  freezeCount++;
+  stopQuestionTimer();
+  freezeCooldownRemain = CFG.COOLDOWN_SEC;
+
+  const overlay = $('freeze-warm-overlay');
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="freeze-breathe-circle"></div>
+    <div class="freeze-text">大脑需要短暂休整<br>请深呼吸 3 次，我们等你回来！</div>
+    <div class="freeze-sub">${CFG.FREEZE_SEC} 秒后可继续</div>
+    <button class="freeze-dismiss-btn" id="freeze-dismiss-btn" style="display:none">我准备好了</button>
+  `;
+  overlay.onclick = () => showFreezeToast();
+
+  let remain = CFG.FREEZE_SEC;
+  freezeTimerId = setInterval(() => {
+    remain--;
+    const subEl = overlay.querySelector('.freeze-sub');
+    if (subEl) subEl.textContent = remain+' 秒后可继续';
+    if (remain <= 0) {
+      clearInterval(freezeTimerId);
+      freezeTimerId = null;
+      const btn = overlay.querySelector('#freeze-dismiss-btn');
+      if (btn) btn.style.display = 'inline-block';
+      const sub = overlay.querySelector('.freeze-sub');
+      if (sub) sub.textContent = '休息好了就点击按钮继续';
+    }
+  }, 1000);
+
+  // 点击"我准备好了"解除
+  overlay.addEventListener('click', function handler(e) {
+    if (e.target.id === 'freeze-dismiss-btn' && remain <= 0) {
+      dismissFreeze();
+      overlay.removeEventListener('click', handler);
+    } else if (e.target.id !== 'freeze-dismiss-btn') {
+      showFreezeToast();
+    }
+  });
+}
+
+function showFreezeToast() {
+  const toast = $('freeze-toast');
+  toast.textContent = '休息时间还未结束';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+function dismissFreeze() {
+  $('freeze-warm-overlay').style.display = 'none';
+  consecutiveErrors = 0;
+  freezeRecoveryFlag = true;
+  freezeRecoveryQAnswered = false;
+  gamePhase = 'PLAYING';
+  updateEnergyUI();
+  updateBottomBar();
+  selectedSlots = [null,null,null,null,null];
+  slotSources = [null,null,null,null,null];
+  timerSec = CFG.TIME_PER_Q;
+  renderQuestion();
+  startQuestionTimer();
+}
+
+// ============================================================
+// 5维评分引擎（新版）
+// ============================================================
+function calcFocusScore() {
+  const total = correctCount + errorCount;
+  if (total === 0) return 50;
+
+  // ===== 模块一：脑电专注分（50分） =====
+  const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
+  const eegScore = eegRatio * 50;
+
+  // ===== 模块二：执行效能分（50分） =====
+  // 正确率 25分
+  const accuracyScore = (correctCount / total) * 25;
+
+  // 反应速度 15分（走神题速度分减半）
+  let totalSpeedW = 0, weightedSpeed = 0;
+  questionRecords.forEach(r => {
+    const w = r.stateAtAnswer === 1 ? 1.0 : 0.5;
+    totalSpeedW += w;
+    weightedSpeed += Math.max(0, 1 - r.elapsed / CFG.TIME_PER_Q) * w;
+  });
+  const avgSpeed = totalSpeedW > 0 ? weightedSpeed / totalSpeedW : 0;
+  const speedScore = Math.max(0, avgSpeed * 15);
+
+  // 稳定性 10分（走神题稳定性减半）
+  const meanT = total > 0 ? questionRecords.reduce((s,r)=>s+r.elapsed,0) / total : CFG.TIME_PER_Q;
+  let totalStabW = 0, weightedVar = 0;
+  questionRecords.forEach(r => {
+    const w = r.stateAtAnswer === 1 ? 1.0 : 0.5;
+    totalStabW += w;
+    weightedVar += Math.pow(r.elapsed - meanT, 2) * w;
+  });
+  const weightedStd = totalStabW > 0 ? Math.sqrt(weightedVar / totalStabW) : 4;
+  const stabilityScore = Math.max(0, Math.min(10, (1 - weightedStd / 4) * 10));
+
+  let execScore = accuracyScore + speedScore + stabilityScore;
+
+  // ===== 联动：脑电达标率<60% → 执行分打折 =====
+  if (eegRatio < 0.6 && total >= 3) {
+    execScore = execScore * (eegRatio / 0.6);
+  }
+
+  return clamp(Math.round(eegScore + execScore), 0, 100);
+}
+
+function updateDimScores(isCorrect, elapsed) {
+  // 专注力：两模块联动模型
+  dimScores.focus = calcFocusScore();
+
+  // 自主学习：错题突破 +15，重蹈覆辙 -10
+  let autoDelta = 0;
+  const pid = currentPoem.id;
+  if (wrongQIds.has(pid) && isCorrect) autoDelta = 15;   // 突破
+  else if (wrongQIds.has(pid) && !isCorrect) autoDelta = -10; // 重蹈覆辙
+  dimScores.autonomy = clamp(dimScores.autonomy + autoDelta, 25, 100);
+
+  // 反应力：3.0s 基准
+  if (isCorrect && elapsed < CFG.REACTION_BASE) dimScores.reaction = clamp(dimScores.reaction + 2, 30, 100);
+  else if (isCorrect && elapsed >= CFG.REACTION_BASE) dimScores.reaction = clamp(dimScores.reaction + 1, 30, 100);
+  else dimScores.reaction = clamp(dimScores.reaction - 0.5, 30, 100);
+
+  // 逻辑思维：答对 +10，答错 -5
+  dimScores.logic = clamp(dimScores.logic + (isCorrect ? 10 : -5), 20, 100);
+
+  // 心理调适：只在冻结恢复后第一题计分（已在submitAnswer/handleTimeout中处理）
+}
+
+function updateDimUI() {
+  const ds = dimScores;
+  $('dim-focus').textContent = ds.focus;
+  $('dim-autonomy').textContent = ds.autonomy;
+  $('dim-reaction').textContent = Math.round(ds.reaction);
+  $('dim-logic').textContent = ds.logic;
+  $('dim-adaptation').textContent = ds.adaptation;
+  const total = Math.round((ds.focus+ds.autonomy+ds.reaction+ds.logic+ds.adaptation)/5);
+  $('dim-total').textContent = total;
+}
+
+// ============================================================
+// 底部栏
+// ============================================================
+function updateBottomBar() {
+  const done = correctCount + errorCount;
+  const pct = Math.round((done/CFG.TOTAL_Q)*100);
+  $('progress-bar').style.width = pct+'%';
+  $('progress-text').textContent = `${done} / ${CFG.TOTAL_Q} 题`;
+  $('error-count').textContent = errorCount;
+  $('cooldown-info').textContent = freezeCooldownRemain > 0 ? `护盾 ${freezeCooldownRemain}s` : '';
+}
+
+// ============================================================
+// 时间序列日志（用于CSV）
+// ============================================================
+function logTimeSeries(isCorrect, userAnswer) {
+  timeSeriesLog.push({
+    timestamp: new Date().toISOString(),
+    state: eegState,
+    qIndex: currentIdx + 1,
+    upper: currentPoem.upper,
+    correctLower: currentPoem.lower,
+    userAnswer: userAnswer,
+    isCorrect: isCorrect,
+    timeUsed: (CFG.TIME_PER_Q - timerSec).toFixed(1),
+    energy: Math.round(energy),
+    difficulty: difficultyMode,
+    freezeCount: freezeCount,
+  });
+}
+
+// ============================================================
+// 结束 & 结果
+// ============================================================
+function endGame() {
+  gamePhase = 'FINISHED';
+  stopQuestionTimer();
+  stopEnergyEngine();
+  $('top-bar').style.display = 'none';
+  $('bottom-bar').style.display = 'none';
+  $('main-area').style.display = 'none';
+
+  $('res-correct').textContent = correctCount;
+  $('res-score').textContent = score;
+  $('res-freeze').textContent = freezeCount;
+  const avgT = responseTimes.length>0 ? (responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length).toFixed(1):'0';
+  $('res-time').textContent = avgT+'s';
+
+  // 错题本
+  const wl = $('wrong-list');
+  wl.innerHTML = '';
+  if (wrongBook.length===0) {
+    wl.innerHTML = '<li style="color:#27AE60;font-weight:700">全部正确，太厉害了!</li>';
+  } else {
+    wrongBook.forEach(w => {
+      wl.innerHTML += `<li>上句: <b>${w.upper}</b> | 正确: <b style="color:#27AE60">${w.lower}</b> | 你的: <span style="color:#E74C3C">${w.userAnswer}</span> <span style="color:#aaa;font-size:11px">(${w.title})</span></li>`;
+    });
+  }
+
+  drawRadar();
+  saveToHistory();
+  $('result-screen').style.display = 'flex';
+  // 默认显示结果页
+  $('tab-result').style.display = 'block';
+  $('tab-history').style.display = 'none';
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-tab="result"]').classList.add('active');
+}
+
+function drawRadar() {
+  const canvas = $('radar-canvas');
+  const ctx = canvas.getContext('2d');
+  const cx=140,cy=140,r=110;
+  const labels=['专注','自主','反应','逻辑','调适'];
+  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation];
+  const n=5;
+  ctx.clearRect(0,0,280,280);
+  for(let level=1;level<=5;level++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const angle=-Math.PI/2+(2*Math.PI/n)*i;
+      const rr=r*level/5;
+      const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath();ctx.strokeStyle='#e8ecf0';ctx.lineWidth=1;ctx.stroke();
+  }
+  for(let i=0;i<n;i++){
+    const angle=-Math.PI/2+(2*Math.PI/n)*i;
+    ctx.beginPath();ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+r*Math.cos(angle),cy+r*Math.sin(angle));
+    ctx.strokeStyle='#e8ecf0';ctx.stroke();
+  }
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const angle=-Math.PI/2+(2*Math.PI/n)*i;
+    const rr=r*values[i]/100;
+    const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();ctx.fillStyle='rgba(74,144,217,.25)';ctx.fill();
+  ctx.strokeStyle='#4A90D9';ctx.lineWidth=2.5;ctx.stroke();
+  for(let i=0;i<n;i++){
+    const angle=-Math.PI/2+(2*Math.PI/n)*i;
+    const rr=r*values[i]/100;
+    const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
+    ctx.beginPath();ctx.arc(x,y,5,0,2*Math.PI);ctx.fillStyle='#4A90D9';ctx.fill();
+    const lx=cx+(r+22)*Math.cos(angle),ly=cy+(r+22)*Math.sin(angle);
+    ctx.fillStyle='#2c3e50';ctx.font='12px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(`${labels[i]} ${values[i]}`,lx,ly);
+  }
+}
+
+// ============================================================
+// 本地存档
+// ============================================================
+function saveToHistory() {
+  const record = {
+    date: new Date().toISOString().split('T')[0],
+    datetime: new Date().toISOString(),
+    totalScore: score,
+    correct: correctCount,
+    errors: errorCount,
+    freezeCount: freezeCount,
+    avgTime: responseTimes.length>0 ? (responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length) : 0,
+    dimensions: {...dimScores},
+    timeSeries: timeSeriesLog,
+  };
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem('tang_poetry_history')||'[]'); } catch(e){}
+  history.push(record);
+  // 只保留30天
+  if (history.length > 30) history = history.slice(-30);
+  localStorage.setItem('tang_poetry_history', JSON.stringify(history));
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('tang_poetry_history')||'[]'); } catch(e){ return []; }
+}
+
+// ============================================================
+// 历史折线图
+// ============================================================
+function drawHistoryChart() {
+  const history = loadHistory();
+  const canvas = $('history-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,500,280);
+
+  if (history.length < 2) {
+    $('history-empty').textContent = '至少需要2次训练记录才能对比';
+    return;
+  }
+  $('history-empty').textContent = '';
+
+  const recent = history.slice(-15);
+  const labels = recent.map(r=>r.date.slice(5)); // MM-DD
+  const dims = ['focus','autonomy','reaction','logic','adaptation'];
+  const colors = ['#4A90D9','#27AE60','#E74C3C','#F39C12','#9B59B6'];
+  const dimNames = ['专注','自主','反应','逻辑','调适'];
+
+  // 坐标轴
+  const padL=40, padR=20, padT=20, padB=40;
+  const w=500-padL-padR, h=280-padT-padB;
+
+  ctx.strokeStyle='#ddd';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=padT+h*i/4;
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(500-padR,y);ctx.stroke();
+  }
+  ctx.fillStyle='#666';ctx.font='10px sans-serif';ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const y=padT+h*i/4;
+    ctx.fillText(Math.round(100-i*20),padL-6,y+4);
+  }
+  ctx.textAlign='center';
+  const xStep = recent.length>1 ? w/(recent.length-1) : w;
+  recent.forEach((r,i)=>{
+    const x=padL+i*xStep;
+    ctx.fillText(labels[i],x,padT+h+18);
+  });
+
+  // 画线
+  dims.forEach((dim,di)=>{
+    ctx.beginPath();
+    ctx.strokeStyle=colors[di];ctx.lineWidth=2;
+    recent.forEach((r,i)=>{
+      const x=padL+i*xStep;
+      const v = r.dimensions ? (r.dimensions[dim]||50) : 50;
+      const y=padT+h*(1-v/100);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  });
+
+  // 图例
+  ctx.font='11px sans-serif';
+  let lx=padL;
+  dimNames.forEach((name,i)=>{
+    ctx.fillStyle=colors[i];
+    ctx.fillRect(lx,padT+h+30,12,12);
+    ctx.fillStyle='#333';
+    ctx.textAlign='left';
+    ctx.fillText(name,lx+15,padT+h+40);
+    lx+=70;
+  });
+}
+
+// ============================================================
+// CSV 导出
+// ============================================================
+function exportCSV() {
+  if (timeSeriesLog.length === 0) { alert('暂无数据可导出'); return; }
+  const headers = ['timestamp','state','qIndex','upper','correctLower','userAnswer','isCorrect','timeUsed','energy','difficulty','freezeCount'];
+  const rows = timeSeriesLog.map(r => headers.map(h => {
+    const v = r[h];
+    if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
+    return v;
+  }).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  a.href = url; a.download = `tang_poetry_${ts}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// 事件绑定
+// ============================================================
+$('start-btn').addEventListener('click', startGame);
+$('restart-btn').addEventListener('click', startGame);
+$('submit-btn').addEventListener('click', submitAnswer);
+$('clear-btn').addEventListener('click', removeLastChar);
+$('export-csv-btn').addEventListener('click', exportCSV);
+$('error-book-btn').addEventListener('click', ()=>{
+  if (wrongBook.length===0) { alert('暂无错题'); return; }
+  const list = wrongBook.map(w=>`${w.upper} → ${w.lower}（你的答案: ${w.userAnswer}）[${w.title}]`).join('\n');
+  alert('错题本:\n\n'+list);
+});
+
+// 标签切换
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    $('tab-result').style.display = tab==='result'?'block':'none';
+    $('tab-history').style.display = tab==='history'?'block':'none';
+    if (tab === 'history') drawHistoryChart();
+  });
+});
+
+// 键盘
+document.addEventListener('keydown', e => {
+  if (gamePhase !== 'PLAYING') return;
+  if (e.key >= '1' && e.key <= '8') {
+    const optIdx = parseInt(e.key)-1;
+    if (optIdx < charOptions.length && !slotSources.includes(optIdx)) {
+      const ch = charOptions[optIdx];
+      const emptyIdx = selectedSlots.findIndex(s=>s===null);
+      if (emptyIdx!==-1) { selectedSlots[emptyIdx]=ch; slotSources[emptyIdx]=optIdx; renderQuestion(); }
+    }
+  }
+  if (e.key === 'Enter') submitAnswer();
+  if (e.key === 'Backspace' || e.key === 'Delete') removeLastChar();
+  if (e.key === 'Escape') { selectedSlots=[null,null,null,null,null]; slotSources=[null,null,null,null,null]; renderQuestion(); }
+});
+
+// ============================================================
+// 启动
+// ============================================================
+loadDB().then(() => {
+  console.log(`题库: ${POETRY_DB.length} 首 | 倒计时固定 ${CFG.TIME_PER_Q}s | 能量 ±${CFG.ENERGY_GAIN}/${CFG.ENERGY_DRAIN}/s`);
+  $('start-screen').style.display = 'flex';
+  $('top-bar').style.display = 'none';
+  $('bottom-bar').style.display = 'none';
+  $('sim-toggle').style.display = 'block';
+});
+</script>
+</body>
+</html>

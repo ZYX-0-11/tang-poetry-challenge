@@ -327,7 +327,7 @@ body{
       <div class="result-stats">
         <div class="result-stat"><div class="val" id="res-correct">0</div><div class="lbl">正确</div></div>
         <div class="result-stat"><div class="val" id="res-score">0</div><div class="lbl">总分</div></div>
-        <div class="result-stat"><div class="val" id="res-time">0s</div><div class="lbl">平均用时</div></div>
+        <div class="result-stat"><div class="val" id="res-time">0s</div><div class="lbl">训练总用时</div></div>
         <div class="result-stat"><div class="val" id="res-freeze">0</div><div class="lbl">休整次数</div></div>
       </div>
       <canvas id="radar-canvas" width="280" height="280" style="max-width:240px"></canvas>
@@ -1206,8 +1206,10 @@ function endGame() {
   const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+dimScores.reaction+dimScores.logic+dimScores.adaptation)/5);
   $('res-score').textContent = finalTotal;
   $('res-freeze').textContent = freezeCount;
-  const avgT = responseTimes.length>0 ? (responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length).toFixed(1):'0';
-  $('res-time').textContent = avgT+'s';
+  const totalSec = sessionEndTime ? Math.round((sessionEndTime - sessionStartTime) / 1000) : 0;
+  const totalMin = Math.floor(totalSec / 60);
+  const totalRemain = totalSec % 60;
+  $('res-time').textContent = totalMin > 0 ? `${totalMin}分${totalRemain}秒` : `${totalSec}秒`;
 
   // 错题本
   const wl = $('wrong-list');

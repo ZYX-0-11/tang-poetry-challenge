@@ -245,7 +245,9 @@ body{
     <div class="char-grid" id="char-grid"></div>
 
     <button class="submit-btn" id="submit-btn" disabled>确认提交</button>
-    <br><span class="clear-btn" id="clear-btn" style="display:none">撤销上字</span>
+    <br>
+    <span class="clear-btn" id="clear-btn" style="display:none">撤销上字</span>
+    <button class="submit-btn" id="skip-btn" style="display:none;background:#F39C12;max-width:280px;width:100%;margin-top:6px">跳过此题（不计正确率）</button>
   </div>
 </div>
 
@@ -272,11 +274,11 @@ body{
   <div class="overlay-card">
     <h1>唐诗飞花</h1>
     <h2>脑电填空挑战</h2>
-    <div class="subtitle">根据上句选出正确的五言下句<br>每题 8 秒，保持专注获取高分</div>
+    <div class="subtitle">根据上句选出正确的五言下句<br>每题 10 秒，保持专注获取高分</div>
     <div class="rules">
       规则说明：<br>
       1. 屏幕显示五言唐诗上句，从下方选字组成下句<br>
-      2. 每题固定 8 秒倒计时，超时算错<br>
+      2. 每题固定 10 秒倒计时，超时算错<br>
       3. 专注时能量槽上涨，走神时下降<br>
       4. 能量归零或连错 3 次触发暖色休整提示<br>
       5. 能量满 100 可主动挑战双题连击<br>
@@ -328,7 +330,7 @@ body{
 // 配置常量
 // ============================================================
 const CFG = {
-  TIME_PER_Q: 8,           // 固定8秒
+  TIME_PER_Q: 10,          // 固定10秒
   FREEZE_SEC: 5,           // 休整5秒
   COOLDOWN_SEC: 30,        // 冷却30秒
   REACTION_BASE: 3.0,      // 反应力基准线(秒)
@@ -394,6 +396,10 @@ let challengeStreak = 0;
 // 时间序列记录(用于CSV)
 let timeSeriesLog = [];
 let sessionStartTime = null;
+let emptySince = 0;          // 无用户输入累计秒数
+let hintGiven = false;       // 已触发自动提示
+let skipShown = false;       // 已显示跳过按钮
+let userHasInput = false;    // 用户是否已有点击/键盘输入
 
 // ============================================================
 // DOM 引用
@@ -618,6 +624,7 @@ function renderQuestion() {
 function onCharClick(ch, optIdx, btnEl) {
   if (gamePhase !== 'PLAYING') return;
   if (slotSources.includes(optIdx)) return;
+  userHasInput = true;
   const emptyIdx = selectedSlots.findIndex(s=>s===null);
   if (emptyIdx===-1) return;
   selectedSlots[emptyIdx] = ch;
@@ -646,11 +653,39 @@ function removeLastChar() {
 function startQuestionTimer() {
   stopQuestionTimer();
   timerSec = CFG.TIME_PER_Q;
+  emptySince = 0;
+  hintGiven = false;
+  skipShown = false;
+  userHasInput = false;
+  $('skip-btn').style.display = 'none';
   updateCountdownUI();
   questionTimerId = setInterval(() => {
     if (gamePhase !== 'PLAYING') return;
     timerSec = Math.max(0, timerSec - 0.1);
     updateCountdownUI();
+    // 无用户输入累计（自动提示不算用户输入）
+    if (!userHasInput) emptySince += 0.1;
+    // 3秒无输入 → 自动提示前两字
+    if (emptySince >= 3 && !hintGiven) {
+      hintGiven = true;
+      const correct = [...currentPoem.lower];
+      const used = new Set(slotSources.filter(s=>s!==null));
+      let found = 0;
+      for (let i=0; i<charOptions.length && found<2; i++) {
+        if (charOptions[i]===correct[found] && !used.has(i)) {
+          selectedSlots[found]=charOptions[i];
+          slotSources[found]=i;
+          used.add(i);
+          found++;
+        }
+      }
+      renderQuestion();
+    }
+    // 5秒无用户输入 → 显示跳过按钮
+    if (emptySince >= 5 && !skipShown) {
+      skipShown = true;
+      $('skip-btn').style.display = 'inline-block';
+    }
     if (timerSec <= 0) handleTimeout();
   }, 100);
 }
@@ -686,8 +721,8 @@ function startEnergyEngine() {
     if (gap > 0) energy = Math.min(target, energy + step);
     else if (gap < 0) energy = Math.max(target, energy - step);
     updateEnergyUI();
-    // 挑战按钮：专注力 >= 100 且答题中（受试者主动点击）
-    if (energy >= 100 && gamePhase === 'PLAYING' && !challengeActive) {
+    // 挑战按钮：专注力 >= 90 且答题中（受试者主动点击）
+    if (energy >= 90 && gamePhase === 'PLAYING' && !challengeActive) {
       $('challenge-btn').style.display = 'inline-block';
     } else {
       $('challenge-btn').style.display = 'none';
@@ -819,6 +854,27 @@ function submitAnswer() {
   }
 }
 
+function skipQuestion() {
+  if (gamePhase !== 'PLAYING' || emptySince < 5) return;
+  stopQuestionTimer();
+  gamePhase = 'FEEDBACK';
+  // 入错题本但不计入正确率
+  wrongBook.push({upper:currentPoem.upper, lower:currentPoem.lower, userAnswer:'跳过', title:currentPoem.title, id:currentPoem.id});
+  const pid = currentPoem.id;
+  wrongQIds.add(pid);
+  dimScores.autonomy = clamp(dimScores.autonomy - 3, 25, 100);
+  if (freezeRecoveryFlag && !freezeRecoveryQAnswered) {
+    freezeRecoveryQAnswered = true;
+    dimScores.adaptation = clamp(dimScores.adaptation - 3, 25, 100);
+  }
+  if (challengeActive) { challengeActive = false; challengeQIndex = 0; }
+  showFeedback(false);
+  updateEnergyUI();
+  updateDimUI();
+  updateBottomBar();
+  setTimeout(() => goNextQuestion(), 900);
+}
+
 function handleTimeout() {
   stopQuestionTimer();
   gamePhase = 'FEEDBACK';
@@ -892,7 +948,7 @@ function showFeedback(isCorrect) {
 // 双题连击
 // ============================================================
 function activateChallenge() {
-  if (gamePhase !== 'PLAYING' || energy < 100 || challengeActive) return;
+  if (gamePhase !== 'PLAYING' || energy < 90 || challengeActive) return;
   challengeActive = true;
   challengeQIndex = 0;
   challengeStreak = 0;
@@ -1313,6 +1369,7 @@ $('start-btn').addEventListener('click', startGame);
 $('restart-btn').addEventListener('click', startGame);
 $('submit-btn').addEventListener('click', submitAnswer);
 $('clear-btn').addEventListener('click', removeLastChar);
+$('skip-btn').addEventListener('click', skipQuestion);
 $('export-csv-btn').addEventListener('click', exportCSV);
 $('error-book-btn').addEventListener('click', ()=>{
   if (wrongBook.length===0) { alert('暂无错题'); return; }
@@ -1336,6 +1393,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.addEventListener('keydown', e => {
   if (gamePhase !== 'PLAYING') return;
   if (e.key >= '1' && e.key <= '8') {
+    userHasInput = true;
     const optIdx = parseInt(e.key)-1;
     if (optIdx < charOptions.length && !slotSources.includes(optIdx)) {
       const ch = charOptions[optIdx];

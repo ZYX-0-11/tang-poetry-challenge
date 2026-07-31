@@ -247,7 +247,7 @@ body{
     <button class="submit-btn" id="submit-btn" disabled>确认提交</button>
     <br>
     <span class="clear-btn" id="clear-btn" style="display:none">撤销上字</span>
-    <button class="submit-btn" id="skip-btn" style="display:none;background:#F39C12;max-width:280px;width:100%;margin-top:6px">跳过此题（不计正确率）</button>
+    <button class="submit-btn" id="skip-btn" style="background:#F39C12;max-width:280px;width:100%;margin-top:6px">跳过此题（不计正确率）</button>
   </div>
 </div>
 
@@ -657,7 +657,6 @@ function startQuestionTimer() {
   hintGiven = false;
   skipShown = false;
   userHasInput = false;
-  $('skip-btn').style.display = 'none';
   updateCountdownUI();
   questionTimerId = setInterval(() => {
     if (gamePhase !== 'PLAYING') return;
@@ -680,11 +679,6 @@ function startQuestionTimer() {
         }
       }
       renderQuestion();
-    }
-    // 5秒无用户输入 → 显示跳过按钮
-    if (emptySince >= 5 && !skipShown) {
-      skipShown = true;
-      $('skip-btn').style.display = 'inline-block';
     }
     if (timerSec <= 0) handleTimeout();
   }, 100);
@@ -855,7 +849,7 @@ function submitAnswer() {
 }
 
 function skipQuestion() {
-  if (gamePhase !== 'PLAYING' || emptySince < 5) return;
+  if (gamePhase !== 'PLAYING') return;
   stopQuestionTimer();
   gamePhase = 'FEEDBACK';
   // 入错题本但不计入正确率

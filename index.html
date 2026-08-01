@@ -1244,14 +1244,14 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
   // === 1. 专注力：EEG时间占比为主 + 答题结果微调 ===
   const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
   if (isSkip) {
-    focusAccumAdj += (state === 0 ? -2.0 : -1.0);
+    focusAccumAdj += (state === 0 ? -1.2 : -0.8);
   } else if (!userAnswer || userAnswer.length !== 5) {
     // 超时
-    focusAccumAdj += (state === 0 ? -2.5 : -1.5);
+    focusAccumAdj += (state === 0 ? -1.5 : -1.0);
   } else if (isCorrect) {
-    focusAccumAdj += 0.3;  // 答对即确认专注有效
+    focusAccumAdj += 0.3;
   } else {
-    focusAccumAdj += (state === 0 ? -2.5 : -1.5);  // 答错按状态区分
+    focusAccumAdj += (state === 0 ? -1.5 : -1.0);
   }
   dimScores.focus = clamp(Math.round(eegRatio * 100 + focusAccumAdj), 0, 100);
 

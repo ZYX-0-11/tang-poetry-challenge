@@ -1292,9 +1292,8 @@ function updateMemoryScore(isCorrect, userAnswer, isSkip, elapsed) {
   }
   // 位置记忆基础分: -2 ~ +3
   let adj = posMatch - 2;
-  // 流利度修正：慢速扣分 → 记忆不牢固
-  if (elapsed > 6) adj -= 2;      // 犹豫型，记忆薄弱
-  else if (elapsed > 4) adj -= 1; // 中等速度，记忆一般
+  // 流利度修正：仅对明显犹豫扣1分
+  if (elapsed > 5) adj -= 1;
 
   dimScores.memory = clamp(dimScores.memory + adj, 0, 100);
 }

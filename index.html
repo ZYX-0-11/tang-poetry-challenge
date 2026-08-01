@@ -1292,8 +1292,13 @@ function updateMemoryScore(isCorrect, userAnswer, isSkip, elapsed) {
   }
   // 位置记忆基础分: -2 ~ +3
   let adj = posMatch - 2;
-  // 流利度修正：仅对明显犹豫扣1分
-  if (elapsed > 5) adj -= 1;
+  // 流利度阶梯修正（3s→10s 梯度）
+  let sp = 0;
+  if (elapsed > 9) sp = 2;
+  else if (elapsed > 7) sp = 1.5;
+  else if (elapsed > 5) sp = 1;
+  else if (elapsed > 3) sp = 0.5;
+  adj -= sp;
 
   dimScores.memory = clamp(dimScores.memory + adj, 0, 100);
 }
@@ -1305,7 +1310,7 @@ function updateDimUI() {
   $('dim-reaction').textContent = Math.round(ds.reaction);
   $('dim-logic').textContent = ds.logic;
   $('dim-adaptation').textContent = ds.adaptation;
-  $('dim-memory').textContent = ds.memory;
+  $('dim-memory').textContent = Math.round(ds.memory);
   const dims = [ds.focus, ds.autonomy, Math.round(ds.reaction), ds.logic, ds.adaptation, ds.memory];
   const total = Math.round(dims.reduce((a,b)=>a+b,0) / dims.length);
   $('dim-total').textContent = total;
@@ -1372,7 +1377,7 @@ function drawRadar() {
   const ctx = canvas.getContext('2d');
   const cx=130, cy=130, r=85;
   const labels=['专注','自主','反应','逻辑','调适','记忆'];
-  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation,dimScores.memory];
+  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation,Math.round(dimScores.memory)];
   const n=6;
   ctx.clearRect(0,0,260,260);
 

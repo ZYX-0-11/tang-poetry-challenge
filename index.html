@@ -479,6 +479,7 @@ let lastAnswerWasWrong = false; // 上一题是否答错（即时恢复奖励）
 let previouslyWrongIds = new Set(); // 历史错题ID（跨session，从localStorage加载）
 let previouslySkippedIds = new Set(); // 历史跳过ID（跨session，仅跳过的题触发自动填入）
 let skippedQIds = new Set();   // 本次跳过题目
+let focusAccumAdj = 0;        // 专注力累加微调（EEG基准 + 每题修正）
 let autoFilledForRetry = false; // 当前题是否已自动填入（错题重遇辅助）
 
 // ============================================================
@@ -626,6 +627,7 @@ function startGame() {
   previouslyWrongIds = new Set(loadErrorBank());
   previouslySkippedIds = new Set(loadSkippedErrorBank());
   skippedQIds = new Set();
+  focusAccumAdj = 0;
   autoFilledForRetry = false;
   gamePhase = 'PLAYING';
 
@@ -820,12 +822,15 @@ function updateCountdownUI() {
 function startEnergyEngine() {
   stopEnergyEngine();
   energyTimerId = setInterval(() => {
+    // Mock 模式：直接从 EEGReceiver 读取状态（与答题对错解耦）
+    if (!hardwareEEGActive && window.EEGReceiver) {
+      eegState = EEGReceiver.getState().state;
+    }
     const state = computeState();
-    eegState = state;
-    // 全程统计（用于模块一脑电分）
+    // 全程统计（用于专注力维度，基于 EEG 状态而非答题结果）
     if (gamePhase === 'PLAYING') {
       sessionTotalSec++;
-      if (state === 1) sessionFocusSec++;
+      if (eegState === 1) sessionFocusSec++;
     }
     // 能量槽仅在答题期间逼近专注力综合分（跳过/反馈/过渡期间冻结）
     if (gamePhase === 'PLAYING') {
@@ -1233,6 +1238,23 @@ function applyFrustrationPenalty() {
 }
 
 function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
+  const state = computeState();
+  const pid = currentPoem.id;
+
+  // === 1. 专注力：EEG时间占比为主 + 答题结果微调 ===
+  const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
+  if (isSkip) {
+    focusAccumAdj += (state === 0 ? -2.0 : -1.0);
+  } else if (!userAnswer || userAnswer.length !== 5) {
+    // 超时
+    focusAccumAdj += (state === 0 ? -2.5 : -1.5);
+  } else if (isCorrect) {
+    focusAccumAdj += 0.3;  // 答对即确认专注有效
+  } else {
+    focusAccumAdj += (state === 0 ? -2.5 : -1.5);  // 答错按状态区分
+  }
+  dimScores.focus = clamp(Math.round(eegRatio * 100 + focusAccumAdj), 0, 100);
+
   if (isSkip) {
     dimScores.autonomy = clamp(dimScores.autonomy - 2, 25, 100);
     consecutiveFrustration++;
@@ -1241,14 +1263,6 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     updateMemoryScore(false, null, true, 0);
     return;
   }
-
-  const state = computeState();
-  const pid = currentPoem.id;
-
-  // === 1. 专注力：每题即时奖惩 ===
-  if (state === 1 && isCorrect) dimScores.focus = clamp(dimScores.focus + 2, 0, 100);
-  else if (state === 0 && isCorrect) dimScores.focus = clamp(dimScores.focus + 0, 0, 100);
-  else if (state === 0 && !isCorrect) dimScores.focus = clamp(dimScores.focus - 3, 0, 100);
 
   // === 2. 自主学习：历史错题记忆 + 本局重试判分 ===
   if (previouslyWrongIds.has(pid)) {

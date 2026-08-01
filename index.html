@@ -1291,8 +1291,8 @@ function updateMemoryScore(isCorrect, userAnswer, isSkip) {
   for (let i = 0; i < 5; i++) {
     if (userChars[i] === correctChars[i]) posMatch++;
   }
-  // 按位置正确数调整：满5字+2 / 4字+1 / 3字+0 / 2字-1 / 1字-2 / 0字-3
-  const adj = posMatch - 3; // -3 ~ +2 区间
+  // 按位置正确数调整：满5字+3 / 4字+2 / 3字+1 / 2字+0 / 1字-1 / 0字-2
+  const adj = posMatch - 2; // -2 ~ +3 区间，20题全对可达100
   dimScores.memory = clamp(dimScores.memory + adj, 0, 100);
 }
 

@@ -174,6 +174,30 @@ body{
 .overlay-card h2{font-size:18px;margin-bottom:18px;color:#7f8c8d;font-weight:500}
 .overlay-card .subtitle{font-size:14px;color:#95a5a6;margin-bottom:24px;line-height:1.8}
 .overlay-card .rules{text-align:left;font-size:13px;color:#555;line-height:2;margin-bottom:24px;padding:16px 20px;background:#f8f9fb;border-radius:14px;border:1px solid #eef1f5}
+/* 分类规则卡片 */
+.rules-cards{text-align:left;margin-bottom:24px}
+.rule-card{margin-bottom:12px;padding:14px 18px;border-radius:14px;border:1px solid #eef1f5;background:#fafbfc}
+.rule-card-title{font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.rule-card-title .icon{font-size:18px}
+.rule-card-body{font-size:12.5px;color:#666;line-height:1.9}
+.rule-card-body .dim-row{display:flex;align-items:baseline;gap:6px}
+.rule-card-body .dim-name{font-weight:600;color:#4A90D9;min-width:38px}
+.rule-card-body .dim-desc{color:#777}
+/* 首次引导 */
+.guide-overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:200}
+.guide-bubble{
+  position:absolute;background:rgba(26,26,46,.92);color:#fff;
+  font-size:13px;font-weight:600;padding:10px 16px;border-radius:10px;
+  box-shadow:0 4px 20px rgba(0,0,0,.35);white-space:nowrap;
+  animation:guideFadeIn .5s ease;
+}
+.guide-bubble::after{
+  content:'';position:absolute;width:0;height:0;
+  border:8px solid transparent;
+}
+.guide-bubble.point-down::after{border-top-color:rgba(26,26,46,.92);top:100%;left:50%;margin-left:-8px}
+.guide-bubble.point-right::after{border-left-color:rgba(26,26,46,.92);right:100%;top:50%;margin-top:-8px}
+@keyframes guideFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .start-btn{
   padding:16px 64px;font-size:22px;font-weight:700;border:none;
   border-radius:18px;background:linear-gradient(135deg,#5a9fd9,#3d7ec5);color:#fff;cursor:pointer;
@@ -289,20 +313,39 @@ body{
   <span class="cooldown-info" id="cooldown-info"></span>
 </footer>
 
+<!-- 首次引导覆盖层 -->
+<div class="guide-overlay" id="guide-overlay" style="display:none"></div>
+
 <!-- 开始界面 -->
 <div class="overlay-screen" id="start-screen">
   <div class="overlay-card">
     <h1>唐诗飞花</h1>
     <h2>脑电填空挑战</h2>
     <div class="subtitle">根据上句选出正确的五言下句<br>每题 10 秒，保持专注获取高分</div>
-    <div class="rules">
-      规则说明：<br>
-      1. 屏幕显示五言唐诗上句，从下方选字组成下句<br>
-      2. 每题固定 10 秒，超时算错，共 20 题<br>
-      3. 能量槽随专注度实时变化，专注加分、走神减分<br>
-      4. 能量降至 15 以下、归零或连错 3 次，触发 5 秒暖色休整<br>
-      5. 能量满 90 可主动挑战双题连击，成倍得分<br>
-      6. 点击已填槽位可撤销该字，3 秒无操作自动提示前 2 字
+    <div class="rules-cards">
+      <div class="rule-card">
+        <div class="rule-card-title"><span class="icon">🎮</span>游戏玩法</div>
+        <div class="rule-card-body">屏幕显示五言唐诗上句，从下方选字拼出正确下句。每题 10 秒，共 20 题。</div>
+      </div>
+      <div class="rule-card">
+        <div class="rule-card-title"><span class="icon">📊</span>六大能力维度（六维平均为最终总分）</div>
+        <div class="rule-card-body">
+          <div class="dim-row"><span class="dim-name">专注力</span><span class="dim-desc">专注态答题加分，走神态扣分</span></div>
+          <div class="dim-row"><span class="dim-name">记忆力</span><span class="dim-desc">逐字位置正确数 × 答题流利度</span></div>
+          <div class="dim-row"><span class="dim-name">反应力</span><span class="dim-desc">比个人近5次平均快则加分，慢则扣分</span></div>
+          <div class="dim-row"><span class="dim-name">逻辑力</span><span class="dim-desc">答错时按字序正确数分级扣分</span></div>
+          <div class="dim-row"><span class="dim-name">自主力</span><span class="dim-desc">错题/跳过重遇答对+8，答错-3；跨局重遇答对+5，再错-5</span></div>
+          <div class="dim-row"><span class="dim-name">调适力</span><span class="dim-desc">受挫后恢复即时加分，连续受挫阶梯扣分</span></div>
+        </div>
+      </div>
+      <div class="rule-card">
+        <div class="rule-card-title"><span class="icon">⚡</span>能量与挑战</div>
+        <div class="rule-card-body">专注→能量涨，走神→能量降。满 90 可主动挑战双题连击（3倍得分）。能量 ≤15 / 归零 / 连错 3 次 → 5 秒暖色休整。</div>
+      </div>
+      <div class="rule-card">
+        <div class="rule-card-title"><span class="icon">✋</span>操作</div>
+        <div class="rule-card-body">点击已填槽位撤销。3 秒无操作自动提示前 2 字。跳过不推进进度，替换当前题目。</div>
+      </div>
     </div>
     <div style="margin-bottom:22px">
       <label style="font-size:13px;color:#7f8c8d;display:block;margin-bottom:8px;letter-spacing:1px">受试者 ID</label>
@@ -608,6 +651,7 @@ function startGame() {
   loadQuestion();
   startEnergyEngine();
   startCooldownTicker();
+  showFirstGuide();
 }
 
 function loadQuestion() {
@@ -1618,6 +1662,66 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Backspace' || e.key === 'Delete') removeLastChar();
   if (e.key === 'Escape') { selectedSlots=[null,null,null,null,null]; slotSources=[null,null,null,null,null]; renderQuestion(); }
 });
+
+// ============================================================
+// 首次引导
+// ============================================================
+function showFirstGuide() {
+  try {
+    if (localStorage.getItem('tang_poetry_guided_v2')) return;
+  } catch(e) { return; }
+  const overlay = $('guide-overlay');
+  // 等待 DOM 渲染完毕再定位
+  setTimeout(() => {
+    const topBar = $('top-bar');
+    const skipBtn = $('skip-btn');
+    const slotsRow = document.querySelector('.slots-row');
+    const bubbles = [];
+    // 引导1：顶部能量槽
+    if (topBar) {
+      const r1 = topBar.getBoundingClientRect();
+      bubbles.push({
+        text: '这里显示你的专注度',
+        x: r1.left + r1.width/2,
+        y: r1.bottom + 8,
+        dir: 'point-down'
+      });
+    }
+    // 引导2：答题槽位区
+    if (slotsRow) {
+      const r2 = slotsRow.getBoundingClientRect();
+      bubbles.push({
+        text: '点击候选字填入，再点槽位可撤销',
+        x: r2.left + r2.width/2,
+        y: r2.top - 40,
+        dir: 'point-down'
+      });
+    }
+    // 引导3：跳过按钮
+    if (skipBtn) {
+      const r3 = skipBtn.getBoundingClientRect();
+      bubbles.push({
+        text: '没把握可以跳过',
+        x: r3.right + 10,
+        y: r3.top + r3.height/2,
+        dir: 'point-right'
+      });
+    }
+    overlay.innerHTML = bubbles.map(b => {
+      const cls = 'guide-bubble ' + b.dir;
+      const style = `left:${b.x}px;top:${b.y}px;transform:translate(-50%,-50%)`;
+      if (b.dir === 'point-right') return `<div class="${cls}" style="${style};transform:translate(0,-50%)">${b.text}</div>`;
+      return `<div class="${cls}" style="${style}">${b.text}</div>`;
+    }).join('');
+    overlay.style.display = 'block';
+    // 4秒后自动消失
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.innerHTML = '';
+    }, 4000);
+    try { localStorage.setItem('tang_poetry_guided_v2', '1'); } catch(e) {}
+  }, 500);
+}
 
 // ============================================================
 // 启动

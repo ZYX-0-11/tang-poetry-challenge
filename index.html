@@ -186,6 +186,7 @@ body{
 .result-stat{text-align:center}
 .result-stat .val{font-size:32px;font-weight:800;color:#2c3e50}
 .result-stat .lbl{font-size:12px;color:#7f8c8d}
+#radar-canvas{display:block;margin:20px auto}
 .wrong-list{text-align:left;max-height:140px;overflow-y:auto;margin:12px 0;font-size:13px;color:#555;line-height:2}
 .wrong-list li{padding:2px 0}
 .history-chart-wrap{margin:16px 0}
@@ -331,7 +332,7 @@ body{
         <div class="result-stat"><div class="val" id="res-time">0s</div><div class="lbl">训练总用时</div></div>
         <div class="result-stat"><div class="val" id="res-freeze">0</div><div class="lbl">休整次数</div></div>
       </div>
-      <canvas id="radar-canvas" width="280" height="280" style="max-width:240px"></canvas>
+      <canvas id="radar-canvas" width="260" height="260" style="max-width:220px"></canvas>
       <h3>错题本</h3>
       <ul class="wrong-list" id="wrong-list"></ul>
     </div>
@@ -1367,45 +1368,57 @@ function endGame() {
 function drawRadar() {
   const canvas = $('radar-canvas');
   const ctx = canvas.getContext('2d');
-  const cx=140,cy=140,r=110;
-  const labels=['专注','自主','反应','逻辑','调适'];
-  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation];
-  const n=5;
-  ctx.clearRect(0,0,280,280);
+  const cx=130, cy=130, r=85;
+  const labels=['专注','自主','反应','逻辑','调适','记忆'];
+  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation,dimScores.memory];
+  const n=6;
+  ctx.clearRect(0,0,260,260);
+
+  // 背景网格（5层同心多边形）
   for(let level=1;level<=5;level++){
     ctx.beginPath();
     for(let i=0;i<n;i++){
       const angle=-Math.PI/2+(2*Math.PI/n)*i;
       const rr=r*level/5;
-      const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
+      const x=cx+rr*Math.cos(angle), y=cy+rr*Math.sin(angle);
       i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     }
-    ctx.closePath();ctx.strokeStyle='#e8ecf0';ctx.lineWidth=1;ctx.stroke();
+    ctx.closePath(); ctx.strokeStyle='#e8ecf0'; ctx.lineWidth=1; ctx.stroke();
   }
+
+  // 轴线
   for(let i=0;i<n;i++){
     const angle=-Math.PI/2+(2*Math.PI/n)*i;
-    ctx.beginPath();ctx.moveTo(cx,cy);
-    ctx.lineTo(cx+r*Math.cos(angle),cy+r*Math.sin(angle));
-    ctx.strokeStyle='#e8ecf0';ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+r*Math.cos(angle), cy+r*Math.sin(angle));
+    ctx.strokeStyle='#e8ecf0'; ctx.stroke();
   }
+
+  // 数据区域
   ctx.beginPath();
   for(let i=0;i<n;i++){
     const angle=-Math.PI/2+(2*Math.PI/n)*i;
-    const rr=r*values[i]/100;
-    const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
+    const rr=r*Math.min(values[i],100)/100;
+    const x=cx+rr*Math.cos(angle), y=cy+rr*Math.sin(angle);
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
   }
-  ctx.closePath();ctx.fillStyle='rgba(74,144,217,.25)';ctx.fill();
-  ctx.strokeStyle='#4A90D9';ctx.lineWidth=2.5;ctx.stroke();
+  ctx.closePath(); ctx.fillStyle='rgba(74,144,217,.22)'; ctx.fill();
+  ctx.strokeStyle='#4A90D9'; ctx.lineWidth=2.5; ctx.stroke();
+
+  // 数据点 + 标签
   for(let i=0;i<n;i++){
     const angle=-Math.PI/2+(2*Math.PI/n)*i;
-    const rr=r*values[i]/100;
-    const x=cx+rr*Math.cos(angle),y=cy+rr*Math.sin(angle);
-    ctx.beginPath();ctx.arc(x,y,5,0,2*Math.PI);ctx.fillStyle='#4A90D9';ctx.fill();
-    const lx=cx+(r+22)*Math.cos(angle),ly=cy+(r+22)*Math.sin(angle);
-    ctx.fillStyle='#2c3e50';ctx.font='12px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(`${labels[i]} ${values[i]}`,lx,ly);
+    const rr=r*Math.min(values[i],100)/100;
+    const x=cx+rr*Math.cos(angle), y=cy+rr*Math.sin(angle);
+    ctx.beginPath(); ctx.arc(x,y,4,0,2*Math.PI); ctx.fillStyle='#4A90D9'; ctx.fill();
+
+    // 标签位置按角度微调，避免重叠
+    const lr=r+32;
+    const lx=cx+lr*Math.cos(angle), ly=cy+lr*Math.sin(angle);
+    ctx.fillStyle='#2c3e50';
+    ctx.font='bold 13px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`${labels[i]} ${values[i]}`, lx, ly);
   }
 }
 

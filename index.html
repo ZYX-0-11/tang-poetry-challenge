@@ -1194,7 +1194,7 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     consecutiveFrustration++;
     lastAnswerWasWrong = true;
     applyFrustrationPenalty();
-    updateMemoryScore(false, null, true);
+    updateMemoryScore(false, null, true, 0);
     return;
   }
 
@@ -1275,12 +1275,11 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
   }
 
   // === 6. 记忆力：按逐字位置匹配累计 ===
-  updateMemoryScore(isCorrect, userAnswer, false);
+  updateMemoryScore(isCorrect, userAnswer, false, elapsed);
 }
 
-function updateMemoryScore(isCorrect, userAnswer, isSkip) {
-  // 记忆力 = 累计位置正确率（直接反映逐字记忆能力）
-  // 跳过/超时不计算位置，统一-2（记忆不明）
+function updateMemoryScore(isCorrect, userAnswer, isSkip, elapsed) {
+  // 记忆力 = 逐字位置记忆 × 流利度（综合考察记忆牢固程度）
   if (isSkip || !userAnswer || userAnswer.length !== 5) {
     dimScores.memory = clamp(dimScores.memory - 2, 0, 100);
     return;
@@ -1291,8 +1290,12 @@ function updateMemoryScore(isCorrect, userAnswer, isSkip) {
   for (let i = 0; i < 5; i++) {
     if (userChars[i] === correctChars[i]) posMatch++;
   }
-  // 按位置正确数调整：满5字+3 / 4字+2 / 3字+1 / 2字+0 / 1字-1 / 0字-2
-  const adj = posMatch - 2; // -2 ~ +3 区间，20题全对可达100
+  // 位置记忆基础分: -2 ~ +3
+  let adj = posMatch - 2;
+  // 流利度修正：慢速扣分 → 记忆不牢固
+  if (elapsed > 6) adj -= 2;      // 犹豫型，记忆薄弱
+  else if (elapsed > 4) adj -= 1; // 中等速度，记忆一般
+
   dimScores.memory = clamp(dimScores.memory + adj, 0, 100);
 }
 

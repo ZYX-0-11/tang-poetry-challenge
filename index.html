@@ -330,12 +330,12 @@ body{
       <div class="rule-card">
         <div class="rule-card-title"><span class="icon">📊</span>六大能力维度（六维平均为最终总分）</div>
         <div class="rule-card-body">
-          <div class="dim-row"><span class="dim-name">专注力</span><span class="dim-desc">专注态答题加分，走神态扣分</span></div>
-          <div class="dim-row"><span class="dim-name">记忆力</span><span class="dim-desc">逐字位置正确数 × 答题流利度</span></div>
-          <div class="dim-row"><span class="dim-name">反应力</span><span class="dim-desc">比个人近5次平均快则加分，慢则扣分</span></div>
-          <div class="dim-row"><span class="dim-name">逻辑力</span><span class="dim-desc">答错时按字序正确数分级扣分</span></div>
-          <div class="dim-row"><span class="dim-name">自主力</span><span class="dim-desc">错题/跳过重遇答对+8，答错-3；跨局重遇答对+5，再错-5</span></div>
-          <div class="dim-row"><span class="dim-name">调适力</span><span class="dim-desc">受挫后恢复即时加分，连续受挫阶梯扣分</span></div>
+          <div class="dim-row"><span class="dim-name">专注力</span><span class="dim-desc">EEG专注时间占比(60%) + 答题正确率与速度(40%)，每答更新</span></div>
+          <div class="dim-row"><span class="dim-name">记忆力</span><span class="dim-desc">5字逐位置评判正确率，结合答题流利度综合打分</span></div>
+          <div class="dim-row"><span class="dim-name">反应力</span><span class="dim-desc">与个人近5次正确均速比较，快于基准加分，慢于扣分</span></div>
+          <div class="dim-row"><span class="dim-name">逻辑力</span><span class="dim-desc">排序准确性，答对加分，答错按字序位置匹配数分级扣分</span></div>
+          <div class="dim-row"><span class="dim-name">自主力</span><span class="dim-desc">评判对历史错题、跳过题的学习能力：跨局再遇或本局重试时答对加分，再错扣分</span></div>
+          <div class="dim-row"><span class="dim-name">调适力</span><span class="dim-desc">评判从答错或休整中恢复的能力，连续受挫加重扣分。无受挫不评分不显示</span></div>
         </div>
       </div>
       <div class="rule-card">
@@ -451,7 +451,7 @@ let sessionFocusSec = 0;           // 全程专注秒数（能量引擎累计）
 let sessionTotalSec = 0;           // 全程总秒数（能量引擎累计）
 let difficultyMode = 'normal';    // 'normal' | 'easy'
 let prevStateWasUnfocused = false;
-let dimScores = {focus:50, autonomy:80, reaction:85, logic:75, adaptation:70, memory:50};
+let dimScores = {focus:50, autonomy:80, reaction:85, logic:60, adaptation:70, memory:50};
 let subjectId = '';
 // 自主学习追踪
 let wrongQIds = new Set();        // 错过的题目id
@@ -636,7 +636,7 @@ function startGame() {
     EEGReceiver.onUpdate((data) => {
       currentTbr = data.tbr;
     });
-    EEGReceiver.start('mock');
+    EEGReceiver.start('websocket', 'ws://localhost:9999');
   }
 
   $('start-screen').style.display = 'none';
@@ -822,23 +822,25 @@ function updateCountdownUI() {
 function startEnergyEngine() {
   stopEnergyEngine();
   energyTimerId = setInterval(() => {
-    // Mock 模式：直接从 EEGReceiver 读取状态（与答题对错解耦）
-    if (!hardwareEEGActive && window.EEGReceiver) {
-      eegState = EEGReceiver.getState().state;
+    // 始终从 EEGReceiver 读取真实 EEG 状态（与答题对错解耦）
+    if (window.EEGReceiver) {
+      const liveState = EEGReceiver.getState().state;
+      if (EEGReceiver._mode === 'websocket' && EEGReceiver._ws && EEGReceiver._ws.readyState === WebSocket.OPEN) {
+        eegState = liveState;
+        hardwareEEGActive = true;
+      } else if (!hardwareEEGActive) {
+        eegState = liveState;
+      }
     }
-    const state = computeState();
+    const state = hardwareEEGActive ? eegState : computeState();
     // 全程统计（用于专注力维度，基于 EEG 状态而非答题结果）
     if (gamePhase === 'PLAYING') {
       sessionTotalSec++;
       if (eegState === 1) sessionFocusSec++;
     }
-    // 能量槽仅在答题期间逼近专注力综合分（跳过/反馈/过渡期间冻结）
+    // 能量槽在答题期间直接反映专注力综合分（与最终专注力公式一致）
     if (gamePhase === 'PLAYING') {
-      const target = calcFocusScore();
-      const gap = target - energy;
-      const step = Math.max(2, Math.abs(gap) * 0.3);
-      if (gap > 0) energy = Math.min(target, energy + step);
-      else if (gap < 0) energy = Math.max(target, energy - step);
+      energy = calcFocusScore();
     }
     // 总训练时长（无论游戏状态，每秒递增）
     totalElapsedSec++;
@@ -1205,31 +1207,20 @@ function dismissFreeze() {
 // 5维评分引擎
 // ============================================================
 function calcFocusScore() {
-  const total = correctCount + errorCount;
-  if (total === 0) return 50;
+  // 与 updateDimScores 中的专注力公式一致：EEG时间占比(60%) + 答题表现(40%)
   const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
-  const eegScore = eegRatio * 50;
-  const accuracyScore = (correctCount / total) * 25;
-  let totalSpeedW = 0, weightedSpeed = 0;
-  questionRecords.forEach(r => {
-    const w = r.stateAtAnswer === 1 ? 1.0 : 0.5;
-    totalSpeedW += w;
-    weightedSpeed += Math.max(0, 1 - r.elapsed / CFG.TIME_PER_Q) * w;
-  });
-  const avgSpeed = totalSpeedW > 0 ? weightedSpeed / totalSpeedW : 0;
-  const speedScore = Math.max(0, avgSpeed * 15);
-  const meanT = total > 0 ? questionRecords.reduce((s,r)=>s+r.elapsed,0) / total : CFG.TIME_PER_Q;
-  let totalStabW = 0, weightedVar = 0;
-  questionRecords.forEach(r => {
-    const w = r.stateAtAnswer === 1 ? 1.0 : 0.5;
-    totalStabW += w;
-    weightedVar += Math.pow(r.elapsed - meanT, 2) * w;
-  });
-  const weightedStd = totalStabW > 0 ? Math.sqrt(weightedVar / totalStabW) : 4;
-  const stabilityScore = Math.max(0, Math.min(10, (1 - weightedStd / 4) * 10));
-  let execScore = accuracyScore + speedScore + stabilityScore;
-  if (eegRatio < 0.6 && total >= 3) { execScore = execScore * (eegRatio / 0.6); }
-  return clamp(Math.round(eegScore + execScore), 0, 100);
+  const totalQ = correctCount + errorCount;
+  const accRate = totalQ > 0 ? correctCount / totalQ : 0.5;
+  const avgTime = responseTimes.length > 0
+    ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+    : CFG.TIME_PER_Q;
+  const speedFactor = Math.max(0, Math.min(1, (CFG.TIME_PER_Q - avgTime) / (CFG.TIME_PER_Q - 3)));
+  const perfScore = accRate * 0.8 + speedFactor * 0.2;
+  return clamp(Math.round(eegRatio * 60 + perfScore * 40 + focusAccumAdj), 0, 100);
+}
+
+function isAdaptationApplicable() {
+  return errorCount > 0 || freezeCount > 0;
 }
 
 function applyFrustrationPenalty() {
@@ -1238,22 +1229,30 @@ function applyFrustrationPenalty() {
 }
 
 function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
-  const state = computeState();
+  const state = eegState;
   const pid = currentPoem.id;
 
-  // === 1. 专注力：EEG时间占比为主 + 答题结果微调 ===
+  // === 1. 专注力：EEG时间占比(60%) + 答题表现(40%)，互为补充 ===
   const eegRatio = sessionTotalSec > 0 ? sessionFocusSec / sessionTotalSec : 0.5;
+  // 答题表现：正确率 + 反应速度
+  const totalQ = correctCount + errorCount;
+  const accRate = totalQ > 0 ? correctCount / totalQ : 0.5;
+  const avgTime = responseTimes.length > 0
+    ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+    : CFG.TIME_PER_Q;
+  const speedFactor = Math.max(0, Math.min(1, (CFG.TIME_PER_Q - avgTime) / (CFG.TIME_PER_Q - 3)));
+  const perfScore = accRate * 0.8 + speedFactor * 0.2;
+  // 每题 EEG 状态微调（幅度缩小，因为行为已占 40%）
   if (isSkip) {
-    focusAccumAdj += (state === 0 ? -1.2 : -0.8);
+    focusAccumAdj += (state === 0 ? -0.8 : -0.5);
   } else if (!userAnswer || userAnswer.length !== 5) {
-    // 超时
-    focusAccumAdj += (state === 0 ? -1.5 : -1.0);
+    focusAccumAdj += (state === 0 ? -0.8 : -0.5);
   } else if (isCorrect) {
-    focusAccumAdj += 0.3;
+    focusAccumAdj += 0.2;
   } else {
-    focusAccumAdj += (state === 0 ? -1.5 : -1.0);
+    focusAccumAdj += (state === 0 ? -0.8 : -0.5);
   }
-  dimScores.focus = clamp(Math.round(eegRatio * 100 + focusAccumAdj), 0, 100);
+  dimScores.focus = clamp(Math.round(eegRatio * 60 + perfScore * 40 + focusAccumAdj), 0, 100);
 
   if (isSkip) {
     dimScores.autonomy = clamp(dimScores.autonomy - 2, 25, 100);
@@ -1294,7 +1293,7 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     dimScores.reaction = clamp(dimScores.reaction - 0.5, 30, 100);
   }
 
-  // === 4. 逻辑思维：错题按位置正确数分级扣分 ===
+  // === 4. 逻辑思维：排序准确性，答对加分，答错按位置正确数分级扣分 ===
   if (!isCorrect && userAnswer && userAnswer.length === 5) {
     const correctChars = [...currentPoem.lower];
     const userChars = [...userAnswer];
@@ -1319,6 +1318,8 @@ function updateDimScores(isCorrect, elapsed, userAnswer, isSkip) {
     } else {
       dimScores.logic = clamp(dimScores.logic - 5, 20, 100);
     }
+  } else if (isCorrect) {
+    dimScores.logic = clamp(dimScores.logic + 2, 20, 100);
   }
 
   // === 5. 心理调适：即时恢复 + 连续受挫阶梯 ===
@@ -1362,9 +1363,18 @@ function updateDimUI() {
   $('dim-autonomy').textContent = ds.autonomy;
   $('dim-reaction').textContent = Math.round(ds.reaction);
   $('dim-logic').textContent = ds.logic;
-  $('dim-adaptation').textContent = ds.adaptation;
   $('dim-memory').textContent = Math.round(ds.memory);
-  const dims = [ds.focus, ds.autonomy, Math.round(ds.reaction), ds.logic, ds.adaptation, ds.memory];
+  // 调适力：仅在有受挫时显示和计入总分
+  const adaptationEl = $('dim-adaptation');
+  if (isAdaptationApplicable()) {
+    adaptationEl.textContent = ds.adaptation;
+    adaptationEl.parentElement.style.display = '';
+  } else {
+    adaptationEl.parentElement.style.display = 'none';
+  }
+  const dims = isAdaptationApplicable()
+    ? [ds.focus, ds.autonomy, Math.round(ds.reaction), ds.logic, ds.adaptation, ds.memory]
+    : [ds.focus, ds.autonomy, Math.round(ds.reaction), ds.logic, ds.memory];
   const total = Math.round(dims.reduce((a,b)=>a+b,0) / dims.length);
   $('dim-total').textContent = total;
 }
@@ -1396,7 +1406,9 @@ function endGame() {
   $('main-area').style.display = 'none';
 
   $('res-correct').textContent = correctCount;
-  const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+dimScores.adaptation+dimScores.memory)/6);
+  const dimCount = isAdaptationApplicable() ? 6 : 5;
+  const adaptationPart = isAdaptationApplicable() ? dimScores.adaptation : 0;
+  const finalTotal = Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+adaptationPart+dimScores.memory)/dimCount);
   $('res-score').textContent = finalTotal;
   $('res-freeze').textContent = freezeCount;
   const totalSec = sessionEndTime ? Math.round((sessionEndTime - sessionStartTime) / 1000) : 0;
@@ -1429,9 +1441,14 @@ function drawRadar() {
   const canvas = $('radar-canvas');
   const ctx = canvas.getContext('2d');
   const cx=130, cy=130, r=85;
-  const labels=['专注','自主','反应','逻辑','调适','记忆'];
-  const values=[dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation,Math.round(dimScores.memory)];
-  const n=6;
+  const showAdaptation = isAdaptationApplicable();
+  const labels = showAdaptation
+    ? ['专注','自主','反应','逻辑','调适','记忆']
+    : ['专注','自主','反应','逻辑','记忆'];
+  const values = showAdaptation
+    ? [dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,dimScores.adaptation,Math.round(dimScores.memory)]
+    : [dimScores.focus,dimScores.autonomy,Math.round(dimScores.reaction),dimScores.logic,Math.round(dimScores.memory)];
+  const n = values.length;
   ctx.clearRect(0,0,260,260);
 
   // 背景网格（5层同心多边形）
@@ -1490,7 +1507,7 @@ function saveToHistory() {
     date: new Date().toISOString().split('T')[0],
     datetime: new Date().toISOString(),
     subjectId: subjectId,
-    totalScore: Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+dimScores.adaptation+dimScores.memory)/6),
+    totalScore: (()=>{const n=isAdaptationApplicable()?6:5;const a=isAdaptationApplicable()?dimScores.adaptation:0;return Math.round((dimScores.focus+dimScores.autonomy+Math.round(dimScores.reaction)+dimScores.logic+a+dimScores.memory)/n);})(),
     correct: correctCount,
     errors: errorCount,
     freezeCount: freezeCount,

@@ -1,3 +1,17 @@
 tunnel.log
 tunnel_url.txt
 start_tunnel.sh
+
+# Large data directories
+HBN_EEG/
+eeg_pipeline/EC/
+eeg_pipeline/ERP-num/
+eeg_pipeline/*.edf
+eeg_pipeline/sim_data.csv
+eeg_pipeline/*.png
+eeg_pipeline/*.csv
+eeg_pipeline/__pycache__/
+
+# Archives and docs
+*.zip
+技术原理与实现逻辑.md

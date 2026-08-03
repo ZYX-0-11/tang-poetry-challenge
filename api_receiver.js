@@ -128,12 +128,13 @@
       };
 
       this._ws.onclose = () => {
-        console.log('[EEGReceiver] WebSocket 断开');
+        console.log('[EEGReceiver] WebSocket 断开，回退 mock');
         this._ws = null;
+        if (this._running) this._startMock();
       };
 
-      this._ws.onerror = (err) => {
-        console.error('[EEGReceiver] WebSocket 错误:', err);
+      this._ws.onerror = () => {
+        // onclose will fire after this, fallback handled there
       };
     },
   };
